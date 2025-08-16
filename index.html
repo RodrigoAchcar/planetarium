@@ -203,6 +203,12 @@ function setMeshes(){
 						let mesh = new THREE.Mesh(geometry, mats);
 						mesh.name = meshesSpec[child.name][i][0].txt.map;
 						mainMesh.add(mesh);
+						
+						if(mesh.name === 'earthClouds-map'){
+							mesh.scale.setScalar(1.008);
+						}
+						
+
 						for(let i = 0; i < mats.length; i++){
 							mats[i].dispose();
 						}
@@ -210,8 +216,9 @@ function setMeshes(){
 				}
 				const raycastMat = new THREE.MeshBasicMaterial( { color: motionPaths[child.name].color, transparent: true, opacity: 0 } );
 				let raycast = new THREE.Mesh(geometry, raycastMat);
-				raycast.scale.set(1.02, 1.02, 1.02);
+				raycast.scale.setScalar(1.02);
 				raycast.name = child.name;
+				raycast.renderOrder = 3;
 				scn.objsIntrsc.push(raycast);
 				scn.rCastMeshPaths[child.name] = raycast;
 				mainMesh.add(raycast);
@@ -237,7 +244,7 @@ function setMeshes(){
 			mainMesh.castShadow  = true;
 			mainMesh.receiveShadow = true;
 			mainMesh.name = child.name;
-			mainMesh.renderOrder = 1;
+			mainMesh.renderOrder = 2;
 			scn.add(mainMesh);
 			scn.meshes[child.name] = mainMesh;
 			geometry.dispose();
@@ -259,11 +266,11 @@ function setMeshes(){
 			curve.curveType = 'centripetal';
 			curve.closed = true;
 			if(objToPathName !== 'sun'){
-				const points = curve.getPoints( scn.pathDivs );
+				const points = curve.getPoints( motionPaths[objToPathName].subDivs );
 				let geometry = new LineGeometry().setFromPoints( points );
 				let matLine = new LineMaterial( {
 					color: motionPaths[objToPathName].color,
-					linewidth: 5,
+					linewidth: 4,
 					dashed: true,
 					dashScale : 0,
 					transparent: true, opacity: 0.16
@@ -271,7 +278,7 @@ function setMeshes(){
 				let line = new Line2( geometry, matLine );
 				line.computeLineDistances();
 				line.scale.set( 1, 1, 1 );
-				line.renderOrder = 1;
+				line.renderOrder = 0;
 				scn.add( line );
 				geometry.dispose();
 				matLine.dispose();
@@ -284,6 +291,7 @@ function setMeshes(){
 	}
 	scn.meshes['saturn'].add(scn.meshes['saturnRing']);
 	scn.meshes['uranus'].add(scn.meshes['uranusRing']);
+	scn.meshes['galaxy'].renderOrder = 0;
 	for(let textures of Object.values(scn.textures) ){
 		for(let texture of Object.values(textures) ){
 			texture.dispose();
@@ -297,7 +305,6 @@ function setMeshes(){
 	delete scn.textures;
 	delete scn.models;
 	setScn();
-	console.log(scn.meshes['earth'])
 }
 function setScn(){
 	scn.fps = 60;
@@ -656,12 +663,12 @@ function filesLoad(){
 			loaderClass: THREE.TextureLoader, absPath : '/media/planetarium/', fileType: 'webp',
 			files: {
 				galaxy: ['nx-map', 'ny-map', 'nz-map', 'px-map', 'py-map', 'pz-map' ],
-				sun: [ 'sun-map' ],
+				sun: [ 'sun-map', 'sun-bumpMap' ],
 				mercury: [ 'mercury-map', 'mercury-bumpMap' ],
 				venus: [ 'venus-map', 'venus-bumpMap'],
 				
 				
-				earth : [ 'earthDay-map', 'earthDay-bumpMap', 'earthDay-metalnessMap', 'earthNight-map', 'earthClouds-map',  'earthClouds-alphaMap' ],
+				earth : [ 'earthDay-map', 'earthDay-bumpMap', 'earthDay-metalnessMap', 'earthNight-map', 'earthClouds-map' ],
 				
 
 				mars: [ 'mars-map', 'mars-bumpMap' ],
@@ -692,61 +699,52 @@ function filesLoad(){
 //[ geometry[{material{txt,spec}}] ] 
 let meshesSpec = {
 	earth : [
-	[ { txt:{map: 'earthDay-map', lightMap: 'earthDay-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthDay-metalnessMap'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.1, anisotropy: 0.1,  bumpScale: 0.02, transparent: true, clipShadows: true, /*depthTest: true, depthWrite: false,*/
+	[ { txt:{map: 'earthDay-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthDay-metalnessMap'}, spec: {roughness: 0, metalness: 0, anisotropy: 0.1,  bumpScale: 0.008, transparent: true, clipShadows: false,
 	blending: THREE.CustomBlending, 
 	blendEquation: THREE.MaxEquation,
-	/*
-	blendSrc: THREE.OneMinusDstAlphaFactor, 
-	blendDst: THREE.OneMinusSrcColorFactor   
-	*/
 	}} ],
-	[ { txt:{map: 'earthNight-map', lightMap: 'earthNight-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthNight-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 8, bumpScale: 0.02
+	[ { txt:{map: 'earthNight-map', lightMap: 
+	'earthNight-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthNight-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 8, bumpScale: 0.008
 	}} ],
-	[{ txt:{map: 'earthClouds-map', lightMap: 'earthClouds-map', alphaMap: 'earthClouds-alphaMap'}, spec: {roughness: 1, metalness: 0, alphaTest: 0.5, lightMapIntensity: 1, transparent: true, 
-	blending: THREE.CustomBlending, 
-	blendEquation: THREE.MaxEquation,
-	blendSrc: THREE.DstAlphaFactor, 
-	blendDst: THREE.DstAlphaFactor 
-	}} ]
+
+	[{ txt:{map: 'earthClouds-map', alphaMap: 'earthClouds-map', displacementMap: 'earthClouds-map'}, spec: {displacementScale: 0.04, roughness: 0, metalness: 0, transparent: true, opacity: 0.6 }} ]
 	],
 	
+	galaxy: [[ { txt:{map:'px-map', lightMap: 'px-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2}}, {txt: {map:'nx-map', lightMap: 'nx-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2} }, {txt:{map:'py-map', lightMap: 'py-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2 }}, { txt:{map:'ny-map', lightMap: 'ny-map'}, spec: { roughness: 0, metalness: 0, lightMapIntensity: 0.2 }}, { txt:{map:'pz-map', lightMap: 'pz-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2 }}, { txt:{map:'nz-map', lightMap: 'nz-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2} } ]],
 	
+	sun: [[ { txt:{map:'sun-map', lightMap: 'sun-map', emissiveMap: 'sun-map', bumpMap: 'sun-bumpMap'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 8, emissive: new THREE.Color(0.7, 0.4, 0), emissiveIntensity: 2, bumpScale: 1} } ]],
 	
-	galaxy: [[ { txt:{map:'px-map', lightMap: 'px-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1}}, {txt: {map:'nx-map', lightMap: 'nx-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1} }, {txt:{map:'py-map', lightMap: 'py-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1 }}, { txt:{map:'ny-map', lightMap: 'ny-map'}, spec: { roughness: 1, metalness: 0, lightMapIntensity: 1 }}, { txt:{map:'pz-map', lightMap: 'pz-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1 }}, { txt:{map:'nz-map', lightMap: 'nz-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1} } ]],
+	mercury: [[ { txt:{map:'mercury-map', bumpMap: 'mercury-bumpMap'}, spec: {roughness: 0, metalness: 0, bumpScale: 0.02} } ]],
 	
-	sun: [[ { txt:{map:'sun-map', lightMap: 'sun-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 2} } ]],
+	venus: [[ { txt:{map:'venus-map', bumpMap: 'venus-bumpMap'}, spec: {roughness: 0, metalness: 0, bumpScale: 0.02} } ]],
 	
-	mercury: [[ { txt:{map:'mercury-map', lightMap: 'mercury-map',bumpMap: 'mercury-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02} } ]],
+	mars: [[ { txt:{map:'mars-map', bumpMap: 'mars-bumpMap'}, spec: {roughness: 1, metalness: 0, bumpScale: 0.02} } ]],
 	
-	venus: [[ { txt:{map:'venus-map', lightMap: 'venus-map',bumpMap: 'venus-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02} } ]],
+	jupiter: [[ { txt:{map:'jupiter-map'}, spec: {roughness: 0, metalness: 0} } ]],
 	
-	mars: [[ { txt:{map:'mars-map', lightMap: 'mars-map',bumpMap: 'mars-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02} } ]],
-	
-	jupiter: [[ { txt:{map:'jupiter-map', lightMap: 'jupiter-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1.6} } ]],
-	
-	saturn: [[ { txt:{map:'saturn-map', lightMap: 'saturn-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1.6} } ]],
+	saturn: [[ { txt:{map:'saturn-map'}, spec: {roughness: 0, metalness: 0} } ]],
 	
 	saturnRing: [[ { txt:{map:'saturnRing-map', lightMap: 'saturnRing-map',alphaMap: 'saturnRing-alphaMap'}, spec: {roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, blending: THREE.AdditiveBlending} } ]],
 	
-	uranus: [[ { txt:{map:'uranus-map', lightMap: 'uranus-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1} } ]],
+	uranus: [[ { txt:{map:'uranus-map'}, spec: {roughness: 0, metalness: 0} } ]],
 	
 	uranusRing: [[ { txt:{map:'uranusRing-map', lightMap: 'uranusRing-map',alphaMap: 'uranusRing-alphaMap'}, spec: {roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, blending: THREE.AdditiveBlending} } ]],
 	
-	neptune: [[ { txt:{map:'neptune-map', lightMap: 'neptune-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1} } ]],
+	neptune: [[ { txt:{map:'neptune-map'}, spec: {roughness: 0, metalness: 0} } ]],
 	
-	pluto: [[ { txt:{map:'pluto-map', lightMap: 'pluto-map', bumpMap: 'pluto-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02} } ]]
+	pluto: [[ { txt:{map:'pluto-map', bumpMap: 'pluto-bumpMap'}, spec: {roughness: 0, metalness: 0, bumpScale: 0.02} } ]]
 }
 let motionPaths = {
-	mercury: {translation: 47.87, rotation: 0.0083, axis: Math.PI/180 * -0.1, color: 0x5e2902},
-	venus: {translation: 35.02, rotation: 0.00652, axis: Math.PI/180 * -177, color: 0x803710},
-	earth: {translation: 29.78, rotation: 0.01574, axis: Math.PI/180 * 23, color: 0x14425b},
-	mars: {translation: 24.077, rotation: 0.00866, axis: Math.PI/180 * -25, color: 0x81524b},
-	jupiter: {translation:13.07, rotation: 0.0045583, axis: Math.PI/180 * -3, color: 0xae6137},
-	saturn: {translation: 9.69, rotation: 0.0036840, axis: Math.PI/180 * -27, color: 0xd9b383},
-	uranus: {translation: 6.81, rotation: 0.0014794, axis: Math.PI/180 * -98, color: 0x9fb6c3},
-	neptune: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x5a69b6},
-	pluto: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x535c6b},
-	sun: {translation: 29.78, rotation: 0.0006875, axis: 0, color: 0xd84b10}
+	sun: {translation: 29.78, rotation: 0.0006875, axis: 0, color: 0xd84b10, subDivs: 20},
+	mercury: {translation: 47.87, rotation: 0.0083, axis: Math.PI/180 * -0.1, color: 0x5e2902, subDivs: 40},
+	venus: {translation: 35.02, rotation: 0.00652, axis: Math.PI/180 * -177, color: 0x803710, subDivs: 60},
+	earth: {translation: 29.78, rotation: 0.01574, axis: Math.PI/180 * 23, color: 0x14425b, subDivs: 100},
+	mars: {translation: 24.077, rotation: 0.00866, axis: Math.PI/180 * -25, color: 0x81524b, subDivs: 140},
+	jupiter: {translation:13.07, rotation: 0.0045583, axis: Math.PI/180 * -3, color: 0xae6137, subDivs: 180},
+	saturn: {translation: 9.69, rotation: 0.0036840, axis: Math.PI/180 * -27, color: 0xd9b383, subDivs: 220},
+	uranus: {translation: 6.81, rotation: 0.0014794, axis: Math.PI/180 * -98, color: 0x9fb6c3, subDivs: 260},
+	neptune: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x5a69b6, subDivs: 320},
+	pluto: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x535c6b, subDivs: 360}
 };
 function clamp(val, min, max) {
     return Math.trunc( (val > max ? max : val < min ? min : val) * 100) / 100;
