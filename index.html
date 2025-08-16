@@ -118,11 +118,13 @@
 	let scn = new THREE.Scene();
 
 function init(){
-	scn.objs = fileLoaders();
+	scn.files = filesLoad();
+
 	scn.objsIntrsc = [];
 	scn.rCastMeshPaths = {};
 	scn.pathDivs = 100;
-	loadFiles(scn.objs);
+	loadFiles(scn.files);
+	
 }		
 async function loadFiles(filesObj){
 	const manager = new THREE.LoadingManager();
@@ -132,102 +134,120 @@ async function loadFiles(filesObj){
 	manager.onProgress = function () {};
 	manager.onLoad = function () {};
 	manager.onError = function () {};
-	for(let objs of Object.values(filesObj) ){
-		for(let obj of Object.values(objs.objFiles) ){
-			for(let file of Object.values(obj) ){
+	for(let types of Object.entries(filesObj) ){
+		for(let objs of Object.entries(types[1].files) ){
+			for(let i = 0; i < objs[1].length; i++){
 				filesLoadQtd++;
 			}
 		}
 	}
-	for(let objs of Object.entries(filesObj) ){
-		for(let obj of Object.entries(objs[1].objFiles) ){
-			filesObj[objs[0]][obj[0]] = {};
-			for(let file of Object.entries(obj[1]) ){
-				const data = await loadFile(objs[1].loaderClass, `${objs[1].absPath}${obj[0]}/${file[1]}.${objs[1].fileType}`);
-				if(objs[0] == 'textures'){
+	for(let types of Object.entries(filesObj) ){
+		scn[types[0]] = {};
+		for(let objs of Object.entries(types[1].files) ){
+			scn[types[0]][objs[0]] = {};
+			for(let i = 0; i < objs[1].length; i++){
+				const data = await loadFile(types[1].loaderClass, `${types[1].absPath}${objs[0]}/${objs[1][i]}.${types[1].fileType}`);
+				if(types[0] == 'textures'){
 					data.colorSpace = THREE.SRGBColorSpace;
 				}
-				data.name = file[1];
-				filesObj[objs[0]][obj[0]][file[0]] = data;
+				scn[types[0]][objs[0]][objs[1][i]] = data;
 				loadCount++;
 			}
 		}
-		delete objs[1].objFiles;
-		delete objs[1].fileType;
-		delete objs[1].absPath;
-		delete objs[1].loaderClass;
 	}
 	if(loadCount == filesLoadQtd){
 		//console.log('loading complete');
+		delete scn.files;
 		setMeshes();
 	}
 }
+
 function setMeshes(){
 	scn.meshes = {};
-	for( let mesh of Object.entries(scn.objs.models.solarSystem.models.scene.children) ){
+	for( let mesh of Object.entries(scn.models.planetarium['solar-system'].scene.children) ){
 		let child = mesh[1];
-		
 		if(child.isMesh){
 			let geometry = child.geometry;
 			geometry.clearGroups();
 			geometry.addGroup( 0, Infinity, 0 );
+			let mainMesh = new THREE.Mesh();
+			let materials = [];
 			
-			let childTx = scn.objs.textures[child.name];
-			let meshBody = new THREE.Mesh();
-			let materials = [];	
-			if(child.name == 'galaxy'){
-				materials = [
-					new THREE.MeshBasicMaterial({ map: childTx.px }), // Right face (+X)
-					new THREE.MeshBasicMaterial({ map: childTx.nx }), // Left face (-X)
-					new THREE.MeshBasicMaterial({ map: childTx.py }), // Top face (+Y)
-					new THREE.MeshBasicMaterial({ map: childTx.ny }), // Bottom face (-Y)
-					new THREE.MeshBasicMaterial({ map: childTx.pz }), // Front face (+Z)
-					new THREE.MeshBasicMaterial({ map: childTx.nz })  // Back face (-Z)
-				];
-			}
-			if(child.name !== 'galaxy'){
-				let mat = new THREE.MeshStandardMaterial({ fog: false });
-				for( let mesh of Object.entries(childTx) ){
-					mat[mesh[0]] = mesh[1];
-				}
-				mat.lightMap = childTx.map;
-				mat.needsUpdate = true;
-				materials.push(mat);
-			}			
-			meshBody.name = child.name;
-			meshBody.renderOrder = 2;
-			meshBody.geometry = geometry;
-			meshBody.scale.normalize();
-			meshBody.material = materials[0];
-			meshBody.castShadow  = true;
-			meshBody.needsUpdate = true;
-
-			for( let matSpec of Object.entries(matSpecs[child.name]) ){
-				meshBody.material[matSpec[0]] = matSpec[1];
-			}
-			scn.add(meshBody);
-
+			//if in motionPaths it has raycast
 			if(motionPaths[child.name]){
-				const raycastMat = new THREE.MeshBasicMaterial( { color: motionPaths[child.name].color, transparent: true, depthTest: false,  opacity: 0 } );
+				geometry = new THREE.InstancedBufferGeometry().copy(child.geometry);
+				geometry.clearGroups();
+				geometry.addGroup( 0, Infinity, 0 );
+				geometry.instanceCount = 1;
+				
+				if(meshesSpec[child.name].length > 1){
+					geometry.clearGroups();
+					for(let i = 0; i <= meshesSpec[child.name].length; i++){
+						geometry.addGroup( 0, Infinity, i );
+					}
+					geometry.instanceCount = meshesSpec[child.name].length+1;
+					for(let i = 1; i < meshesSpec[child.name].length; i++){
+						let mats = [];
+						for(let j = 0; j < meshesSpec[child.name][i].length; j++){
+							let mat = new THREE.MeshStandardMaterial({ fog: false });
+							for( let param of Object.entries(meshesSpec[child.name][i][j].txt) ){
+								mat[param[0]] = scn.textures[child.name][param[1]];
+							}
+							for( let param of Object.entries(meshesSpec[child.name][i][j].spec) ){
+								mat[param[0]] = param[1];
+							}
+							mat.name = meshesSpec[child.name][i][j].txt.map;
+							mat.needsUpdate = true;
+							mats.push(mat);
+						}
+						let mesh = new THREE.Mesh(geometry, mats);
+						mesh.name = meshesSpec[child.name][i][0].txt.map;
+						mainMesh.add(mesh);
+						for(let i = 0; i < mats.length; i++){
+							mats[i].dispose();
+						}
+					}
+				}
+				const raycastMat = new THREE.MeshBasicMaterial( { color: motionPaths[child.name].color, transparent: true, opacity: 0 } );
 				let raycast = new THREE.Mesh(geometry, raycastMat);
 				raycast.scale.set(1.02, 1.02, 1.02);
 				raycast.name = child.name;
 				scn.objsIntrsc.push(raycast);
 				scn.rCastMeshPaths[child.name] = raycast;
-				meshBody.add(raycast);
+				mainMesh.add(raycast);
 				raycastMat.dispose();
 			}
 			
-			scn.meshes[child.name] = meshBody;
+			for(let i = 0; i < meshesSpec[child.name][0].length; i++){
+				let mat = new THREE.MeshStandardMaterial({ fog: false });
+				for( let param of Object.entries(meshesSpec[child.name][0][i].txt) ){
+					mat[param[0]] = scn.textures[child.name][param[1]];
+				}
+				for( let param of Object.entries(meshesSpec[child.name][0][i].spec) ){
+					mat[param[0]] = param[1];
+				}
+				mat.name = meshesSpec[child.name][0][i].txt.map;
+				mat.needsUpdate = true;
+				materials.push(mat);
+			}
+			
+			mainMesh.geometry = geometry;
+			mainMesh.scale.normalize();
+			mainMesh.material = materials;
+			mainMesh.castShadow  = true;
+			mainMesh.receiveShadow = true;
+			mainMesh.name = child.name;
+			mainMesh.renderOrder = 1;
+			scn.add(mainMesh);
+			scn.meshes[child.name] = mainMesh;
 			geometry.dispose();
 			for(let i = 0; i < materials.length; i++){
 				materials[i].dispose();
 			}
 			if(motionPaths[child.name]){
-				meshBody.rotation.z = motionPaths[child.name].axis;
+				mainMesh.rotation.z = motionPaths[child.name].axis;
 			}
 		}
-
 		if(child.isLineSegments){
 			let objToPathName = child.name.split('-orbit')[0];
 			let pathPoints = child.geometry.attributes.position.array;
@@ -238,36 +258,38 @@ function setMeshes(){
 			let curve = new THREE.CatmullRomCurve3( curveV3coords );
 			curve.curveType = 'centripetal';
 			curve.closed = true;
-			const points = curve.getPoints( scn.pathDivs );
-			let geometry = new LineGeometry().setFromPoints( points );
-			let matLine = new LineMaterial( {
-				color: motionPaths[objToPathName].color,
-				linewidth: 5,
-				dashed: true,
-				dashScale : 0,
-				transparent: true, opacity: 0.3
-			} );
-			let line = new Line2( geometry, matLine );
-			line.computeLineDistances();
-			line.scale.set( 1, 1, 1 );
-			line.renderOrder = 1;
-			scn.add( line );
+			if(objToPathName !== 'sun'){
+				const points = curve.getPoints( scn.pathDivs );
+				let geometry = new LineGeometry().setFromPoints( points );
+				let matLine = new LineMaterial( {
+					color: motionPaths[objToPathName].color,
+					linewidth: 5,
+					dashed: true,
+					dashScale : 0,
+					transparent: true, opacity: 0.16
+				} );
+				let line = new Line2( geometry, matLine );
+				line.computeLineDistances();
+				line.scale.set( 1, 1, 1 );
+				line.renderOrder = 1;
+				scn.add( line );
+				geometry.dispose();
+				matLine.dispose();
+			}
 			motionPaths[objToPathName]['curve'] = curve;
 			motionPaths[objToPathName]['object'] = scn.meshes[objToPathName];
 			motionPaths[objToPathName]['raycast'] = scn.rCastMeshPaths[objToPathName];
-			geometry.dispose();
-			matLine.dispose();
+			
 		}
 	}
 	scn.meshes['saturn'].add(scn.meshes['saturnRing']);
 	scn.meshes['uranus'].add(scn.meshes['uranusRing']);
-	
-	for(let textures of Object.values(scn.objs.textures) ){
+	for(let textures of Object.values(scn.textures) ){
 		for(let texture of Object.values(textures) ){
 			texture.dispose();
 		}
 	}
-	scn.objs.models.solarSystem.models.scene.traverse(function(object){
+	scn.models.planetarium['solar-system'].scene.traverse(function(object){
 		if( object.isMesh ){
 			object.geometry.dispose();
 		}
@@ -275,9 +297,10 @@ function setMeshes(){
 	delete scn.textures;
 	delete scn.models;
 	setScn();
+	console.log(scn.meshes['earth'])
 }
 function setScn(){
-	scn.fps = 30;
+	scn.fps = 60;
 	scn.currFrame = 0;
 	scn.motionCount = 0;
 	scn.canvas = document.getElementById("canvas");
@@ -296,13 +319,14 @@ function setScn(){
 	scn.sunLight = setLights();
 	scn.add( scn.sunLight );
 	scn.infoCtnr = new THREE.Group();
-
-	scn.cam.position.set( -4, 5, 88 );
+	scn.cam.position.set( -60, 2, 60 );
 
 	window.addEventListener( 'pointermove', pointermove);
 	window.addEventListener( 'pointerdown', pointerdown );
 	window.addEventListener( 'pointerup', pointerup );
 	window.addEventListener( 'wheel', wheel );
+	window.addEventListener( 'keyup', keyup );
+	window.addEventListener( 'keydown', keydown );
 	window.addEventListener( 'resize', resize );
 	scn.then = performance.now();
 	scn.now = performance.now();
@@ -321,7 +345,7 @@ function setRenderer(){
 }
 function setCamera(){
 	let camera = new THREE.PerspectiveCamera( 35, scn.canvas.width / scn.canvas.height, 0.01, 100000 );
-	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.aspect = scn.canvas.width /scn.canvas.height;
 	camera.frameCue = 0;
 	camera.locked = false;
 	camera.target = null;
@@ -333,13 +357,13 @@ function setCamera(){
 	return camera;
 }
 function setLights(){
-	let sunLight = new THREE.PointLight( 0xffffff, 1000000, 1);
-	sunLight.power = 1000000;
+	let sunLight = new THREE.PointLight( 0xffffff, 100000);
+	sunLight.power = 500000;
 	sunLight.castShadow = true;
 	sunLight.shadow.mapSize.width = 512; // default
 	sunLight.shadow.mapSize.height = 512; // default
-	sunLight.shadow.camera.near = 0.1; // default
-	sunLight.shadow.camera.far = 50000; // default				
+	sunLight.shadow.camera.near = 0.5; // default
+	sunLight.shadow.camera.far = 5000; // default				
 	sunLight.position.set( 0, 0, 0 );
 	sunLight.needsUpdate = true;
 	return sunLight;
@@ -360,6 +384,13 @@ function pointermove( event ) {
 	scn.rCast.setFromCamera( scn.pointer, scn.cam );
 	let intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
 	let meshType;
+	if(!scn.cam.locked){
+
+		scn.cam.rotation.x += scn.pointer.y/100;
+		scn.cam.rotation.y -= scn.pointer.x/100;
+	}
+	
+	
 	if ( intersects.length > 0 ) {	
 		let intersected = intersects[0];
 		if(scn.currIntrsc.v == null){
@@ -369,7 +400,7 @@ function pointermove( event ) {
 			if( meshType == 'InstancedMesh' ){				
 			}
 			if( meshType == 'Mesh' ){
-				scn.currIntrsc.v.object.material.opacity = 0.1;
+				scn.currIntrsc.v.object.material.opacity = 0.3;
 			}
 		}
 		if(intersected.object.name != scn.currIntrsc.v.object.name){
@@ -382,7 +413,7 @@ function pointermove( event ) {
 			meshType = intersected.object.constructor.name;
 			scn.currIntrsc.v = intersected;				
 			if( meshType == 'Mesh' ){
-				intersected.object.material.opacity = 0.1;
+				intersected.object.material.opacity = 0.3;
 			}
 		}		
 		if(intersected.object.name == scn.currIntrsc.v.object.name){
@@ -522,6 +553,24 @@ function pointerup( event ) {
 		}
 	}
 }
+function keydown( event ) {
+	if(!scn.cam.locked){
+	  if (event.key === 'ArrowUp') {
+		scn.cam.position.z -= 1;
+	  }
+	  if (event.key === 'ArrowDown') {
+		scn.cam.position.z += 1;
+	  }
+	  if (event.key === 'ArrowLeft') {
+		scn.cam.position.x -= 1;
+	  }
+	  if (event.key === 'ArrowRight') {
+		scn.cam.position.x += 1;
+	  }
+	}
+}
+function keyup( event ) {
+}
 function wheel(event){
 	event.preventDefault();
 	event.distance = Math.trunc((event.deltaY/16)*100)/100;
@@ -601,54 +650,91 @@ function easeInOutQuad(t, b, c, d) {
 	return -c / 2 * ((--t) * (t - 2) - 1) + b;
 }
 
-function fileLoaders(){
+function filesLoad(){
 	return {
 		textures: {
 			loaderClass: THREE.TextureLoader, absPath : '/media/planetarium/', fileType: 'webp',
-			objFiles: {
-				galaxy: { nx: 'nx', ny:'ny', nz:'nz', px:'px', py:'py', pz:'pz' },
-				sun: { map: 'sun-map' },
-				mercury: { map: 'mercury-map', bumpMap: 'mercury-bump' },
-				venus: { map: 'venus-map', bumpMap: 'venus-bump'},
-				earth : { map: 'earthDay-map', mapNight: 'earthNight-map', mapClouds: 'earthClouds-map', alphaMap: 'earthClouds-alpha', bumpMap: 'earth-bump', metalnessMap: 'earth-specular' },
-				mars: { map: 'mars-map', bumpMap: 'mars-bump' },
-				jupiter: { map: 'jupiter-map' },
-				saturn: { map: 'saturn-map' },
-				saturnRing: { map: 'saturnRing-map', alphaMap: 'saturnRing-alpha' },
-				uranus: { map: 'uranus-map' },
-				uranusRing: { map: 'uranusRing-map', alphaMap: 'uranusRing-alpha' },
-				neptune: { map: 'neptune-map' },
-				pluto: { map: 'pluto-map', bumpMap: 'pluto-bump' }
+			files: {
+				galaxy: ['nx-map', 'ny-map', 'nz-map', 'px-map', 'py-map', 'pz-map' ],
+				sun: [ 'sun-map' ],
+				mercury: [ 'mercury-map', 'mercury-bumpMap' ],
+				venus: [ 'venus-map', 'venus-bumpMap'],
+				
+				
+				earth : [ 'earthDay-map', 'earthDay-bumpMap', 'earthDay-metalnessMap', 'earthNight-map', 'earthClouds-map',  'earthClouds-alphaMap' ],
+				
+
+				mars: [ 'mars-map', 'mars-bumpMap' ],
+				jupiter: ['jupiter-map' ],
+				saturn: [ 'saturn-map' ],
+				saturnRing: [ 'saturnRing-map', 'saturnRing-alphaMap' ],
+				uranus: [ 'uranus-map' ],
+				uranusRing: [ 'uranusRing-map', 'uranusRing-alphaMap' ],
+				neptune: [ 'neptune-map' ],
+				pluto: [ 'pluto-map', 'pluto-bumpMap' ]
 			}
 		},
 		models: {
-			loaderClass: GLTFLoader, absPath : "/static/js/webgl/models/planetarium/", fileType: 'glb',
-			objFiles: {
-				solarSystem: {models: 'solar-system'}
+			loaderClass: GLTFLoader, absPath : "/static/js/webgl/models/", fileType: 'glb',
+			files: {
+				planetarium: ['solar-system']
 			}
 		},
 		fonts: {
 			loaderClass: FontLoader, absPath : "/static/fonts/", fileType: 'json',
-			objFiles: {
-				raleway: { regular: 'raleway_regular', semibold: 'raleway_semibold'}
+			files: {
+				raleway: [ 'raleway-regular', 'raleway-semibold']
 			}
 		}
 	}
 }
-let matSpecs = {
-	galaxy : { roughness: 1, metalness: 1, lightMapIntensity: 1 },
-	sun: { roughness: 1, metalness: 0, lightMapIntensity: 1  },
-	mercury: { roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02 },
-	venus: { roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02 },
-	earth : { roughness: 1, metalness: 1, lightMapIntensity: 1, bumpScale: 0.02 },
-	mars: { roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02 },
-	jupiter: { roughness: 1, metalness: 0.1, lightMapIntensity: 1.6 },
-	saturn: { roughness: 0.8, metalness: 0.2, lightMapIntensity: 1 },
-	saturnRing: { roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, blending: THREE.AdditiveBlending },
-	uranus: { roughness: 0.8, metalness: 0.2, lightMapIntensity: 2 },
-	uranusRing: { roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, blending: THREE.AdditiveBlending },
-	neptune: { roughness: 0.8, metalness: 0.2, lightMapIntensity: 2 },
-	pluto: { roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02 }
+
+//[ geometry[{material{txt,spec}}] ] 
+let meshesSpec = {
+	earth : [
+	[ { txt:{map: 'earthDay-map', lightMap: 'earthDay-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthDay-metalnessMap'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.1, anisotropy: 0.1,  bumpScale: 0.02, transparent: true, clipShadows: true, /*depthTest: true, depthWrite: false,*/
+	blending: THREE.CustomBlending, 
+	blendEquation: THREE.MaxEquation,
+	/*
+	blendSrc: THREE.OneMinusDstAlphaFactor, 
+	blendDst: THREE.OneMinusSrcColorFactor   
+	*/
+	}} ],
+	[ { txt:{map: 'earthNight-map', lightMap: 'earthNight-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthNight-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 8, bumpScale: 0.02
+	}} ],
+	[{ txt:{map: 'earthClouds-map', lightMap: 'earthClouds-map', alphaMap: 'earthClouds-alphaMap'}, spec: {roughness: 1, metalness: 0, alphaTest: 0.5, lightMapIntensity: 1, transparent: true, 
+	blending: THREE.CustomBlending, 
+	blendEquation: THREE.MaxEquation,
+	blendSrc: THREE.DstAlphaFactor, 
+	blendDst: THREE.DstAlphaFactor 
+	}} ]
+	],
+	
+	
+	
+	galaxy: [[ { txt:{map:'px-map', lightMap: 'px-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1}}, {txt: {map:'nx-map', lightMap: 'nx-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1} }, {txt:{map:'py-map', lightMap: 'py-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1 }}, { txt:{map:'ny-map', lightMap: 'ny-map'}, spec: { roughness: 1, metalness: 0, lightMapIntensity: 1 }}, { txt:{map:'pz-map', lightMap: 'pz-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1 }}, { txt:{map:'nz-map', lightMap: 'nz-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1} } ]],
+	
+	sun: [[ { txt:{map:'sun-map', lightMap: 'sun-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 2} } ]],
+	
+	mercury: [[ { txt:{map:'mercury-map', lightMap: 'mercury-map',bumpMap: 'mercury-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02} } ]],
+	
+	venus: [[ { txt:{map:'venus-map', lightMap: 'venus-map',bumpMap: 'venus-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02} } ]],
+	
+	mars: [[ { txt:{map:'mars-map', lightMap: 'mars-map',bumpMap: 'mars-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02} } ]],
+	
+	jupiter: [[ { txt:{map:'jupiter-map', lightMap: 'jupiter-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1.6} } ]],
+	
+	saturn: [[ { txt:{map:'saturn-map', lightMap: 'saturn-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1.6} } ]],
+	
+	saturnRing: [[ { txt:{map:'saturnRing-map', lightMap: 'saturnRing-map',alphaMap: 'saturnRing-alphaMap'}, spec: {roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, blending: THREE.AdditiveBlending} } ]],
+	
+	uranus: [[ { txt:{map:'uranus-map', lightMap: 'uranus-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1} } ]],
+	
+	uranusRing: [[ { txt:{map:'uranusRing-map', lightMap: 'uranusRing-map',alphaMap: 'uranusRing-alphaMap'}, spec: {roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, blending: THREE.AdditiveBlending} } ]],
+	
+	neptune: [[ { txt:{map:'neptune-map', lightMap: 'neptune-map'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1} } ]],
+	
+	pluto: [[ { txt:{map:'pluto-map', lightMap: 'pluto-map', bumpMap: 'pluto-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 1, bumpScale: 0.02} } ]]
 }
 let motionPaths = {
 	mercury: {translation: 47.87, rotation: 0.0083, axis: Math.PI/180 * -0.1, color: 0x5e2902},
@@ -665,7 +751,6 @@ let motionPaths = {
 function clamp(val, min, max) {
     return Math.trunc( (val > max ? max : val < min ? min : val) * 100) / 100;
 }
-
 function animate() {
 	if( scn.now - scn.then >= scn.fps){
 		scn.then = performance.now();
@@ -687,8 +772,8 @@ function render(){
 		//key[1].raycast.position.copy(key[1].curve.getPointAt( (currentFrame/scn.pathDivs * key[1].translation / 10) % scn.pathDivs/scn.pathDivs ) );
 	}
 	
-	scn.meshes['earth'].rotation.y += 0.002;
-	scn.meshes['venus'].rotation.y += 0.003;
+	scn.meshes['earth'].children[1].rotation.y += 0.003;
+
 	if(scn.cam.locked){
 		cameraLock(scn.cam, scn.currentFrame, scn.infoCtnr, scn.renderGroup);
 	}
@@ -722,68 +807,6 @@ function animeItem(item, property, paramArr, endVArr, duration, delay=0, endActi
 	return;
 }
 init();
-
-
-
-
-		/*
-			if(child.name == 'saturnRing') {
-
-				mat.blending = THREE.AdditiveBlending;  
-
-				meshBody.scale.set(1.001, 1.001, 1.001);
-				meshBody.geometry = geometry;
-				meshBody.material = materials;
-				meshBody.side = THREE.DoubleSide;
-				meshBody.receiveShadow = true;
-			}
-			*/
-			/*
-			if(child.name != 'saturnRing'){
-				geometry = new THREE.InstancedBufferGeometry().copy(child.geometry);
-				geometry.clearGroups();
-				geometry.addGroup( 0, Infinity, 0 );
-				geometry.addGroup( 0, Infinity, 1 );
-				geometry.addGroup( 0, Infinity, 2 );
-				geometry.instanceCount = 1;
-				if(child.name == 'earth') {
-					geometry.instanceCount = 3;
-					mat.transparent = false;
-					mat.blending = THREE.CustomBlending;
-					mat.blendSrc = THREE.SrcColorFactor; 
-					mat.blendDst = THREE.OneMinusSrcColorFactor;
-
-					let matNight = new THREE.MeshStandardMaterial( { map: childTexture['mapNight'] } );
-					matNight.lightMap = childTexture['mapNight'];
-					matNight.lightMapIntensity = 20;
-					matNight.displacementMap = childTexture['bump'];
-					matNight.displacementScale = 0.002;
-					matNight.needsUpdate = true; 
-					materials.unshift(matNight);
-					childTexture['mapNight'].dispose();
-					matNight.dispose();
-
-					let matClouds = new THREE.MeshStandardMaterial( { map: childTexture['mapClouds']} );
-					matClouds.blending = THREE.CustomBlending;
-					matClouds.blendEquation = THREE.MaxEquation;
-					matClouds.displacementMap = childTexture['mapClouds'];
-					matClouds.displacementScale = 0.02;
-					matClouds.needsUpdate = true; 
-
-
-					let cloudsMesh = new THREE.Mesh( geometry, matClouds );
-					cloudsMesh.renderOrder = 2;
-					cloudsMesh.scale.set(1.0001, 1.0001, 1.0001);
-
-					meshBody.add(cloudsMesh);
-					matClouds.dispose();
-					}
-				}	
-				
-*/		
-
-
-
 </script>
 </div>
 <div></div></body></html>
