@@ -103,65 +103,238 @@
 	}
 </script>
 <script type="module">
-    import * as THREE from 'three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-    import { Line2 } from 'three/addons/lines/Line2.js';
-    import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
-    import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
-    import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 
-    THREE.Cache.enabled = true;
-    const requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
-    const cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
+THREE.Cache.enabled = true;
+const requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+const cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
 
-	let scn = new THREE.Scene();
-
+let scn = new THREE.Scene();
 function init(){
 	scn.files = filesLoad();
-
 	scn.objsIntrsc = [];
 	scn.rCastMeshPaths = {};
-	scn.pathDivs = 100;
 	loadFiles(scn.files);
-	
-}		
-async function loadFiles(filesObj){
-	const manager = new THREE.LoadingManager();
-	let filesLoadQtd = 0;
-	let loadCount = 0;
-	manager.onStart = function () {};
-	manager.onProgress = function () {};
-	manager.onLoad = function () {};
-	manager.onError = function () {};
-	for(let types of Object.entries(filesObj) ){
-		for(let objs of Object.entries(types[1].files) ){
-			for(let i = 0; i < objs[1].length; i++){
-				filesLoadQtd++;
-			}
+}
+function pointermove( event ){
+	event.preventDefault();
+	scn.pointer.x = ( event.clientX / scn.canvas.width ) * 2 - 1;
+	scn.pointer.y = - ( event.clientY / scn.canvas.height ) * 2 + 1;
+	scn.rCast.setFromCamera( scn.pointer, scn.cam );
+	scn.intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
+	if(!scn.cam.lock){
+		scn.cam.rotation.x += scn.pointer.y/100;
+		scn.cam.rotation.y -= scn.pointer.x/100;
+	}
+	if ( scn.intersects.length > 0 ) {	
+		if(scn.currIntrsc == null){
+			//'new'			
+			scn.currIntrsc = scn.intersects[0];
+			animeItem(scn.currIntrsc.object, 'material', ['opacity'], [0.3], 0.5);
+		}
+		if(scn.currIntrsc.object.name != scn.intersects[0].object.name){
+			//'changed'
+			animeItem(scn.currIntrsc.object, 'material', ['opacity'], [0], 0.5);
+			scn.currIntrsc = scn.intersects[0];	
+			animeItem(scn.currIntrsc.object, 'material', ['opacity'], [0.3], 0.5);
 		}
 	}
-	for(let types of Object.entries(filesObj) ){
-		scn[types[0]] = {};
-		for(let objs of Object.entries(types[1].files) ){
-			scn[types[0]][objs[0]] = {};
-			for(let i = 0; i < objs[1].length; i++){
-				const data = await loadFile(types[1].loaderClass, `${types[1].absPath}${objs[0]}/${objs[1][i]}.${types[1].fileType}`);
-				if(types[0] == 'textures'){
-					data.colorSpace = THREE.SRGBColorSpace;
-				}
-				scn[types[0]][objs[0]][objs[1][i]] = data;
-				loadCount++;
-			}
+	if ( scn.intersects.length == 0 ) {
+		if(scn.currIntrsc != null){
+			//'none'
+			animeItem(scn.currIntrsc.object, 'material', ['opacity'], [0], 0.5);
+			scn.currIntrsc = null;
 		}
-	}
-	if(loadCount == filesLoadQtd){
-		//console.log('loading complete');
-		delete scn.files;
-		setMeshes();
 	}
 }
+function pointerdown( event ) {
+	scn.pointer.x = ( event.clientX / scn.canvas.width ) * 2 - 1;
+	scn.pointer.y = - ( event.clientY / scn.canvas.height ) * 2 + 1;
+	scn.rCast.setFromCamera( scn.pointer, scn.cam );
+	scn.intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
+	if ( scn.intersects.length > 0 ) {
+		scn.currIntrsc = scn.intersects[0];
+		scn.cam.frameCue = 0;
+		scn.cam.target = scn.currIntrsc.object;
+		scn.cam.targetOffset = scn.cam.target.geometry.boundingSphere.radius * 2;
+		console.log(scn.cam.target.geometry.boundingSphere.radius, scn.cam.targetOffset)
+		scn.cam.initP = scn.cam.position;
+		
+		scn.cam.rMatrix.lookAt( scn.cam.position, scn.cam.targetP, scn.worldUp );
+		scn.cam.targetQ.setFromRotationMatrix( scn.cam.rMatrix );
+		scn.cam.lock = true;
+	}
+/*
+	let targetInfo = document.getElementById(target.name);
+	let topic = targetInfo.getElementsByTagName('h2')[0].textContent;
+	let descriptionTag = targetInfo.getElementsByTagName('p');
+	let description = '';
+	for(let item of descriptionTag){
+		description += item.textContent + '\n';
+	}
+	scn.infoCtnr.visible = true;
+	let textMeshTopic = createInfoText(topic, scn.fonts.raleway['raleway-semibold'], 0.003);
+	scn.infoCtnr.add( textMeshTopic );
+	textMeshTopic.position.y = -0.002;
 
+	let textMeshDescription = createInfoText(description, scn.fonts.raleway['raleway-regular'], 0.002);
+	textMeshDescription.position.y = -0.006;
+	scn.infoCtnr.add( textMeshDescription );
+
+	animeItem(scn.infoCtnr.children[0], 'material', ['opacity'], [0], 1);
+	animeItem(scn.infoCtnr.children[1], 'material', ['opacity'], [0], 1, 0, function(){ scn.infoCtnr.children[0].geometry.dispose(); scn.infoCtnr.children[0].material.dispose(); 
+	scn.infoCtnr.children[1].geometry.dispose(); scn.infoCtnr.children[1].material.dispose(); scn.infoCtnr.clear()				
+	});
+*/
+}
+function cameraLock(){
+	scn.cam.initP = scn.cam.position;
+	scn.cam.targetP = scn.cam.target.getWorldPosition( scn.cam.targetP );
+	scn.cam.deltaP = scn.cam.deltaP.copy(scn.cam.targetP).sub(scn.cam.initP).normalize();
+	scn.cam.distance = scn.cam.initP.distanceTo(scn.cam.targetP);
+
+	if( scn.cam.distance > scn.cam.targetOffset ){
+		scn.cam.getWorldDirection(scn.cam.worldDirection);
+		scn.cam.position.addScaledVector(scn.cam.worldDirection, scn.cam.speed);
+		
+		scn.cam.rMatrix.lookAt( scn.cam.position, scn.cam.targetP, scn.worldUp );
+		scn.cam.targetQ.setFromRotationMatrix( scn.cam.rMatrix );
+		if ( ! scn.cam.quaternion.equals( scn.cam.targetQ ) ) {
+		const step = (scn.cam.quaternion.angleTo(scn.cam.targetQ) ) * (scn.cam.frameCue/30);
+			scn.cam.quaternion.rotateTowards( scn.cam.targetQ, step );
+		}
+		scn.cam.frameCue++;
+		
+	}
+	
+	if( scn.cam.distance <= scn.cam.targetOffset ){
+		scn.cam.lookAt(scn.cam.targetP);
+		scn.cam.lock = false;
+		console.log('wtf')
+		/*
+		if( infoCtnr.children[0].material.opacity == 0 ){
+			animeItem(infoCtnr.children[0], 'material', ['opacity'], [1], 1);
+			animeItem(infoCtnr.children[1], 'material', ['opacity'], [1], 1);
+		}*/
+		
+		return;
+	}
+}
+function createInfoText(textContent, fontStyle, fontSize){
+	let textGeo = new TextGeometry( textContent, {
+		font: fontStyle,
+		size: fontSize,
+		depth: 0,
+		bevelEnabled: false					
+	} );
+	textGeo.clearGroups();
+	textGeo.computeBoundingBox();
+	let centerOffset = - 0.5 * ( textGeo.boundingBox.max.x - textGeo.boundingBox.min.x );
+	let textMat = new THREE.MeshPhongMaterial( { color: 0xffffff, flatShading: true, emissive: new THREE.Color( 0xffffff ), transparent: true, opacity: 0 } );
+	
+	textMat.needsUpdate = true;
+	let textMesh = new THREE.Mesh( textGeo, textMat );
+	textMesh.renderOrder = 4;
+	textMesh.position.x = centerOffset;
+
+	return textMesh;	
+}
+
+function pointerup( event ){}
+function keydown( event ) {
+	if(!scn.cam.lock){
+		scn.cam.getWorldDirection(scn.cam.worldDirection);
+		if (event.key === 'ArrowUp') {
+			scn.cam.position.addScaledVector(scn.cam.worldDirection, scn.cam.speed);
+		}
+		if (event.key === 'ArrowDown') {
+			scn.cam.position.addScaledVector(scn.cam.worldDirection.negate(), scn.cam.speed);
+		}
+		if (event.key === 'ArrowRight') {
+			scn.cam.direction.crossVectors(scn.cam.worldDirection, scn.worldUp).normalize();
+			scn.cam.position.addScaledVector(scn.cam.direction, scn.cam.speed);
+		}
+		if (event.key === 'ArrowLeft') {
+			scn.cam.direction.crossVectors(scn.cam.worldDirection, scn.worldUp).normalize();
+			scn.cam.position.addScaledVector(scn.cam.direction.negate(), scn.cam.speed);
+		}
+	}
+}
+function keyup( event ) {
+}
+function wheel(event){
+	event.preventDefault();
+	if(!scn.cam.lock){
+		scn.cam.getWorldDirection(scn.cam.worldDirection);
+		event.distance = Math.trunc((event.deltaY/16)*100)/100;
+		if(event.deltaY >= 0){
+			scn.cam.position.addScaledVector(scn.cam.worldDirection.negate(), scn.cam.speed);
+		}
+		if(event.deltaY < 0){
+			scn.cam.position.addScaledVector(scn.cam.worldDirection, scn.cam.speed);
+		}
+	}
+	return;
+}
+function resize(camera, renderer) {
+	scn.canvas.width = window.innerWidth;
+	scn.canvas.height = window.innerHeight;
+	scn.renderer.setSize( scn.canvas.width, scn.canvas.height );
+	scn.cam.aspect = scn.canvas.clientWidth / scn.canvas.clientHeight;
+	scn.cam.updateProjectionMatrix();
+
+}
+function clamp(val, min, max) {
+    return Math.trunc( (val > max ? max : val < min ? min : val) * 100) / 100;
+}
+function animate() {
+	if( scn.now - scn.then >= scn.fps){
+		scn.then = performance.now();
+		render();
+	}
+	scn.now = performance.now();
+	requestAnimationFrame(animate);
+}
+function render(){
+	scn.currFrame++;
+	for( let key of Object.entries(motionPaths) ){
+		scn.meshes[key[0]].position.copy(key[1].curve.getPointAt( (scn.currFrame/key[1].subDivs * key[1].translation / 10) % key[1].subDivs/key[1].subDivs ) );
+		scn.meshes[key[0]].rotation.y += key[1].rotation;
+	}
+	scn.meshes['earth'].children[1].rotation.y += 0.003;
+	if(scn.cam.lock){ cameraLock(); }
+	for(let i = 0; i < scn.renderGroup.length; i++){
+		// [ startFrame, duration(seconds), item, property, param, ease, startV, deltaV, endV, endAction ]
+		scn.motionCount = scn.currFrame - scn.renderGroup[i][0];
+		if(scn.motionCount >= scn.renderGroup[i][1]){
+			scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = scn.renderGroup[i][8];
+			if(scn.renderGroup[i][9]){
+				scn.renderGroup[i][9]();
+			}
+			scn.renderGroup.splice(i, 1);
+			continue;
+		}
+		scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = Math.trunc(scn.renderGroup[i][5](scn.motionCount, scn.renderGroup[i][6], scn.renderGroup[i][7], scn.renderGroup[i][1])*100 )/100;			
+	}
+	scn.cam.updateProjectionMatrix();
+	scn.renderer.render( scn, scn.cam );
+}
+function animeItem(item, property, paramArr, endVArr, duration, delay=0, endAction=null, ease=easeInOutQuad){
+	duration = Math.trunc(((duration + delay)* 1000)/scn.fps);
+	for (let i = 0; i < paramArr.length; i++){
+		let startV = item[property][paramArr[i]];
+		let deltaV = endVArr[i] - startV;
+		if(i > 0){endAction = null}
+		scn.renderGroup.push( [ scn.currFrame, duration, item, property, [paramArr[i]], ease, startV, deltaV, endVArr[i], endAction ] );
+	}
+	return;
+}
 function setMeshes(){
 	scn.meshes = {};
 	for( let mesh of Object.entries(scn.models.planetarium['solar-system'].scene.children) ){
@@ -315,9 +488,14 @@ function setScn(){
 	scn.canvas.width = Math.trunc(scn.canvas.bb.width*100)/100;
 	scn.canvas.height = Math.trunc(scn.canvas.bb.height*100)/100;
 	
+	
 	scn.pointer = new THREE.Vector2();
 	scn.rCast = new THREE.Raycaster();
-	scn.currIntrsc = { v : null, instanceId: null, };
+	scn.intersects = null;
+	scn.currIntrsc = null;
+	scn.worldUp = new THREE.Vector3(0, 1, 0);
+
+
 
 	scn.renderGroup = [];
 	scn.renderer = setRenderer();
@@ -328,12 +506,12 @@ function setScn(){
 	scn.infoCtnr = new THREE.Group();
 	scn.cam.position.set( -60, 2, 60 );
 
-	window.addEventListener( 'pointermove', pointermove);
-	window.addEventListener( 'pointerdown', pointerdown );
-	window.addEventListener( 'pointerup', pointerup );
-	window.addEventListener( 'wheel', wheel );
-	window.addEventListener( 'keyup', keyup );
-	window.addEventListener( 'keydown', keydown );
+	document.addEventListener( 'pointermove', pointermove);
+	document.addEventListener( 'pointerdown', pointerdown );
+	document.addEventListener( 'pointerup', pointerup );
+	document.addEventListener( 'wheel', wheel );
+	document.addEventListener( 'keyup', keyup );
+	document.addEventListener( 'keydown', keydown );
 	window.addEventListener( 'resize', resize );
 	scn.then = performance.now();
 	scn.now = performance.now();
@@ -351,16 +529,22 @@ function setRenderer(){
 	return renderer;
 }
 function setCamera(){
-	let camera = new THREE.PerspectiveCamera( 35, scn.canvas.width / scn.canvas.height, 0.01, 100000 );
+	let camera = new THREE.PerspectiveCamera( 35, window.innerWidth / window.innerHeight, 0.01, 100000 );
 	camera.aspect = scn.canvas.width /scn.canvas.height;
 	camera.frameCue = 0;
-	camera.locked = false;
-	camera.target = null;
-	camera.initP = null;
+	camera.lock = false;
+	camera.initP = new THREE.Vector3();
 	camera.deltaP = new THREE.Vector3();
 	camera.distance = null;
+	camera.target = null;
+	camera.targetP = new THREE.Vector3();
+	camera.targetQ = new THREE.Quaternion();
 	camera.targetOffset = null;
-	camera.activeTransform = {active: false, axis: null, value:null};
+	camera.worldDirection = new THREE.Vector3();
+	camera.getWorldDirection(camera.worldDirection); 
+	camera.direction = new THREE.Vector3();
+	camera.rMatrix = new THREE.Matrix4();
+	camera.speed = 1.0;
 	return camera;
 }
 function setLights(){
@@ -375,7 +559,41 @@ function setLights(){
 	sunLight.needsUpdate = true;
 	return sunLight;
 }
-    
+async function loadFiles(filesObj){
+	const manager = new THREE.LoadingManager();
+	let filesLoadQtd = 0;
+	let loadCount = 0;
+	manager.onStart = function () {};
+	manager.onProgress = function () {};
+	manager.onLoad = function () {};
+	manager.onError = function () {};
+	for(let types of Object.entries(filesObj) ){
+		for(let objs of Object.entries(types[1].files) ){
+			for(let i = 0; i < objs[1].length; i++){
+				filesLoadQtd++;
+			}
+		}
+	}
+	for(let types of Object.entries(filesObj) ){
+		scn[types[0]] = {};
+		for(let objs of Object.entries(types[1].files) ){
+			scn[types[0]][objs[0]] = {};
+			for(let i = 0; i < objs[1].length; i++){
+				const data = await loadFile(types[1].loaderClass, `${types[1].absPath}${objs[0]}/${objs[1][i]}.${types[1].fileType}`);
+				if(types[0] == 'textures'){
+					data.colorSpace = THREE.SRGBColorSpace;
+				}
+				scn[types[0]][objs[0]][objs[1][i]] = data;
+				loadCount++;
+			}
+		}
+	}
+	if(loadCount == filesLoadQtd){
+		//console.log('loading complete');
+		delete scn.files;
+		setMeshes();
+	}
+}
 function loadFile(loaderClass, filePath) {
 	return new Promise((resolve) => {
 		const loader = new loaderClass;
@@ -384,279 +602,6 @@ function loadFile(loaderClass, filePath) {
 		});
 	});
 }
-function pointermove( event ) {
-	event.preventDefault();
-	scn.pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-	scn.pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
-	scn.rCast.setFromCamera( scn.pointer, scn.cam );
-	let intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
-	let meshType;
-	if(!scn.cam.locked){
-
-		scn.cam.rotation.x += scn.pointer.y/100;
-		scn.cam.rotation.y -= scn.pointer.x/100;
-	}
-	
-	
-	if ( intersects.length > 0 ) {	
-		let intersected = intersects[0];
-		if(scn.currIntrsc.v == null){
-			//'new'			
-			scn.currIntrsc.v = intersected;			
-			meshType = scn.currIntrsc.v.object.constructor.name;
-			if( meshType == 'InstancedMesh' ){				
-			}
-			if( meshType == 'Mesh' ){
-				scn.currIntrsc.v.object.material.opacity = 0.3;
-			}
-		}
-		if(intersected.object.name != scn.currIntrsc.v.object.name){
-			//'changed'
-			
-			meshType = scn.currIntrsc.v.object.constructor.name;
-			if( meshType == 'Mesh' ){
-				scn.currIntrsc.v.object.material.opacity = 0;
-			}
-			meshType = intersected.object.constructor.name;
-			scn.currIntrsc.v = intersected;				
-			if( meshType == 'Mesh' ){
-				intersected.object.material.opacity = 0.3;
-			}
-		}		
-		if(intersected.object.name == scn.currIntrsc.v.object.name){
-		}
-	}
-	if ( intersects.length == 0 ) {
-		if(scn.currIntrsc.v != null){
-			//'none'
-			meshType = scn.currIntrsc.v.object.constructor.name;
-			if( meshType == 'InstancedMesh' ){
-			}
-			if( meshType == 'Mesh' ){
-				scn.currIntrsc.v.object.material.opacity = 0;
-			}
-			scn.currIntrsc.v = null;
-		}
-	}
-}
-function pointerdown( event ) {
-	event.preventDefault();
-	scn.pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-	scn.pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
-	scn.rCast.setFromCamera( scn.pointer, scn.cam );
-	let intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
-	let meshType;
-	if ( intersects.length > 0 ) {	
-		let intersected = intersects[0];
-		
-		if(scn.currIntrsc.v == null){
-			scn.currIntrsc.v = intersected;
-			meshType = currIntrsc.v.object.constructor.name;
-			if( meshType == 'InstancedMesh' ){	
-				let instanceId = scn.currIntrsc.v.instanceId;
-				let dummy = new THREE.Matrix4();
-				let temp = new THREE.Object3D();
-				scn.currIntrsc.v.object.getMatrixAt(instanceId, dummy);
-		
-				dummy.decompose(temp.position, temp.quaternion, temp.scale);
-
-			}
-			if( meshType == 'Mesh' ){
-
-			}
-		}
-		if(scn.currIntrsc.v.object.name != intersected.object.name){
-			//'changed'	
-			if( meshType == 'InstancedMesh' ){
-
-			}
-			if( meshType == 'Mesh' ){				
-				
-			}
-			scn.currIntrsc.v = intersected;	
-		}	
-		if(scn.currIntrsc.v.object.name == intersected.object.name){
-			//'same'
-			meshType = scn.currIntrsc.v.object.constructor.name;
-			if( meshType == 'InstancedMesh' ){
-				let instanceId = scn.currIntrsc.v.instanceId;
-				let transformV = scn.currIntrsc.v.object.userData[instanceId];
-				scn.cam.activeTransform.active = true;
-				scn.cam.activeTransform.axis = transformV[0];
-				scn.cam.activeTransform.value = transformV[1];
-			}
-			if( meshType == 'Mesh' ){
-				let initP = scn.cam.position;								
-				let target = intersected.object;
-				let targetOffset = target.geometry.boundingSphere.radius * 3;
-
-				let targetInfo = document.getElementById(target.name);
-				let topic = targetInfo.getElementsByTagName('h2')[0].textContent;
-				let descriptionTag = targetInfo.getElementsByTagName('p');
-				let description = '';
-				for(let item of descriptionTag){
-					description += item.textContent + '\n';
-				}
-				scn.infoCtnr.visible = true;
-				
-				let textMeshTopic = createInfoText(topic, scn.objs.fonts.raleway.semibold, 0.003);
-				scn.infoCtnr.add( textMeshTopic );
-				textMeshTopic.position.y = -0.002;
-
-				let textMeshDescription = createInfoText(description, scn.objs.fonts.raleway.regular, 0.002);
-				textMeshDescription.position.y = -0.006;
-				scn.infoCtnr.add( textMeshDescription );
-				
-				scn.cam.distance = Math.ceil(Math.abs(initP.distanceTo(target.position) - targetOffset));
-
-				scn.cam.initP = initP;
-				scn.cam.target = target;
-				scn.cam.targetOffset = targetOffset;	
-
-				scn.cam.frameCue = 0;				
-				scn.cam.locked = true;
-				scn.cam.activeTransform.active = false;
-
-			}
-		}
-	}
-	if ( intersects.length == 0 ) {
-		if(scn.currIntrsc.v != null){
-			//'none'
-			meshType = scn.currIntrsc.v.object.constructor.name;
-			if( meshType == 'InstancedMesh' ){
-				let instanceId = scn.currIntrsc.v.instanceId;
-				let dummy = new THREE.Matrix4();
-				let temp = new THREE.Object3D();				
-				scn.currIntrsc.v.object.getMatrixAt(instanceId, dummy);
-				dummy.decompose(temp.position, temp.quaternion, temp.scale);
-				temp.scale.z = scn.cam.aspect;
-				temp.updateMatrix();
-				scn.currIntrsc.v.object.setMatrixAt(instanceId, temp.matrix);
-			}
-			if( meshType == 'Mesh' ){
-				
-			}
-			scn.currIntrsc.v = null;
-		}
-		if(scn.infoCtnr.children[0]){
-			if(scn.infoCtnr.children[0].material.opacity == 1){
-				animeItem(scn.infoCtnr.children[0], 'material', ['opacity'], [0], 1);
-				animeItem(scn.infoCtnr.children[1], 'material', ['opacity'], [0], 1, 0, function(){ scn.infoCtnr.children[0].geometry.dispose(); scn.infoCtnr.children[0].material.dispose(); 
-				scn.infoCtnr.children[1].geometry.dispose(); scn.infoCtnr.children[1].material.dispose(); scn.infoCtnr.clear()				
-				});
-
-			}
-		}
-		scn.attach(scn.cam);
-	}
-}
-function pointerup( event ) {
-	if(scn.currIntrsc.v != null){
-		let meshType = scn.currIntrsc.v.object.constructor.name;
-		if( meshType == 'InstancedMesh' ){
-			scn.currIntrsc.v = null;
-			scn.cam.activeTransform.active = false;		
-		}
-	}
-}
-function keydown( event ) {
-	if(!scn.cam.locked){
-	  if (event.key === 'ArrowUp') {
-		scn.cam.position.z -= 1;
-	  }
-	  if (event.key === 'ArrowDown') {
-		scn.cam.position.z += 1;
-	  }
-	  if (event.key === 'ArrowLeft') {
-		scn.cam.position.x -= 1;
-	  }
-	  if (event.key === 'ArrowRight') {
-		scn.cam.position.x += 1;
-	  }
-	}
-}
-function keyup( event ) {
-}
-function wheel(event){
-	event.preventDefault();
-	event.distance = Math.trunc((event.deltaY/16)*100)/100;
-	scn.cam.position.z += event.distance;
-	scn.cam.position.z = clamp(scn.cam.position.z, scn.cam.position.z/1.4, scn.cam.position.z*1.4);
-	return;
-}
-function cameraLock(cam, currentFrame, infoCtnr, renderGroup){
-	let currDistance = Math.abs(cam.position.distanceTo(cam.target.position) - cam.targetOffset);
-	cam.deltaP = cam.deltaP.copy(cam.target.position).sub(cam.initP).normalize();
-	if( Math.abs(currDistance - cam.targetOffset) > cam.targetOffset ){
-		cam.position.set(
-			easeInOutQuad(cam.frameCue, cam.initP.x, cam.deltaP.x, cam.distance),	
-			easeInOutQuad(cam.frameCue, cam.initP.y, cam.deltaP.y, cam.distance),
-			easeInOutQuad(cam.frameCue, cam.initP.z, cam.deltaP.z, cam.distance)
-		);
-		const rotationMatrix = new THREE.Matrix4();
-		const targetQuaternion = new THREE.Quaternion();
-		rotationMatrix.lookAt( cam.position, cam.target.position, cam.up );
-		targetQuaternion.setFromRotationMatrix( rotationMatrix );
-		if ( ! cam.quaternion.equals( targetQuaternion ) ) {
-		const step = (cam.quaternion.angleTo(targetQuaternion) ) * (cam.frameCue/30);
-			cam.quaternion.rotateTowards( targetQuaternion, step );
-		}
-		cam.frameCue++;
-	}else{ 
-		cam.lookAt(cam.target.position);
-		cam.target.attach(cam);
-		cam.locked = false;
-		if( infoCtnr.children[0].material.opacity == 0 ){
-			animeItem(infoCtnr.children[0], 'material', ['opacity'], [1], 1);
-			animeItem(infoCtnr.children[1], 'material', ['opacity'], [1], 1);
-		}
-		return;
-	}
-}
-
-function createInfoText(textContent, fontStyle, fontSize){
-	let textGeo = new TextGeometry( textContent, {
-		font: fontStyle,
-		size: fontSize,
-		depth: 0,
-		bevelEnabled: false					
-	} );
-	textGeo.clearGroups();
-	textGeo.computeBoundingBox();
-	let centerOffset = - 0.5 * ( textGeo.boundingBox.max.x - textGeo.boundingBox.min.x );
-	let textMat = new THREE.MeshPhongMaterial( { color: 0xffffff, flatShading: true, emissive: new THREE.Color( 0xffffff ), transparent: true, opacity: 0 } );
-	
-	textMat.needsUpdate = true;
-	let textMesh = new THREE.Mesh( textGeo, textMat );
-	textMesh.renderOrder = 4;
-	textMesh.position.x = centerOffset;
-
-	return textMesh;	
-}
-function checkNegative(refNumber){
-	if( refNumber < 0 ){
-		return -1;
-	}else{
-		return 1;
-	}
-}
-function resize(camera, renderer) {
-	scn.canvas.width = window.innerWidth;
-	scn.canvas.height = window.innerHeight;
-	scn.renderer.setSize( scn.canvas.width, scn.canvas.height );
-	scn.cam.aspect = scn.canvas.clientWidth / scn.canvas.clientHeight;
-	scn.cam.updateProjectionMatrix();
-
-}
-function easeLinear(t, b, c, d) {
-	return c * t / d + b;
-}	
-function easeInOutQuad(t, b, c, d) {
-	if ((t /= d / 2) < 1) return c / 2 * t * t + b;
-	return -c / 2 * ((--t) * (t - 2) - 1) + b;
-}
-
 function filesLoad(){
 	return {
 		textures: {
@@ -695,7 +640,6 @@ function filesLoad(){
 		}
 	}
 }
-
 //[ geometry[{material{txt,spec}}] ] 
 let meshesSpec = {
 	earth : [
@@ -710,7 +654,14 @@ let meshesSpec = {
 	[{ txt:{map: 'earthClouds-map', alphaMap: 'earthClouds-map', displacementMap: 'earthClouds-map'}, spec: {displacementScale: 0.04, roughness: 0, metalness: 0, transparent: true, opacity: 0.6 }} ]
 	],
 	
-	galaxy: [[ { txt:{map:'px-map', lightMap: 'px-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2}}, {txt: {map:'nx-map', lightMap: 'nx-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2} }, {txt:{map:'py-map', lightMap: 'py-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2 }}, { txt:{map:'ny-map', lightMap: 'ny-map'}, spec: { roughness: 0, metalness: 0, lightMapIntensity: 0.2 }}, { txt:{map:'pz-map', lightMap: 'pz-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2 }}, { txt:{map:'nz-map', lightMap: 'nz-map'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 0.2} } ]],
+	galaxy: [[ 
+	{ txt:{map:'px-map'}, spec: {roughness: 0.1, metalness: 0.2}}, 
+	{txt: {map:'nx-map'}, spec: {roughness: 0.1, metalness: 0.2} }, 
+	{txt:{map:'py-map'}, spec: {roughness: 0.1, metalness: 0.2 }}, 
+	{ txt:{map:'ny-map'}, spec: { roughness: 0.1, metalness: 0.2 }}, 
+	{ txt:{map:'pz-map'}, spec: {roughness: 0.1, metalness: 0.2}}, 
+	{ txt:{map:'nz-map'}, spec: {roughness: 0.1, metalness: 0.2} } 
+	]],
 	
 	sun: [[ { txt:{map:'sun-map', lightMap: 'sun-map', emissiveMap: 'sun-map', bumpMap: 'sun-bumpMap'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 8, emissive: new THREE.Color(0.7, 0.4, 0), emissiveIntensity: 2, bumpScale: 1} } ]],
 	
@@ -746,63 +697,12 @@ let motionPaths = {
 	neptune: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x5a69b6, subDivs: 320},
 	pluto: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x535c6b, subDivs: 360}
 };
-function clamp(val, min, max) {
-    return Math.trunc( (val > max ? max : val < min ? min : val) * 100) / 100;
-}
-function animate() {
-	if( scn.now - scn.then >= scn.fps){
-		scn.then = performance.now();
-		render();
-	}
-	scn.now = performance.now();
-	requestAnimationFrame(animate);
-}
-function render(){
-	scn.currFrame++;
-	
-	if(scn.cam.activeTransform.active){
-		scn.cam[scn.cam.activeTransform.axis](scn.cam.activeTransform.value);
-	}	
-	
-	for( let key of Object.entries(motionPaths) ){
-		scn.meshes[key[0]].position.copy(key[1].curve.getPointAt( (scn.currFrame/scn.pathDivs * key[1].translation / 10) % scn.pathDivs/scn.pathDivs ) );
-		scn.meshes[key[0]].rotation.y += key[1].rotation;
-		//key[1].raycast.position.copy(key[1].curve.getPointAt( (currentFrame/scn.pathDivs * key[1].translation / 10) % scn.pathDivs/scn.pathDivs ) );
-	}
-	
-	scn.meshes['earth'].children[1].rotation.y += 0.003;
-
-	if(scn.cam.locked){
-		cameraLock(scn.cam, scn.currentFrame, scn.infoCtnr, scn.renderGroup);
-	}
-	
-	for(let i = 0; i < scn.renderGroup.length; i++){
-		// [ startFrame, duration(seconds), item, property, param, ease, startV, deltaV, endV, endAction ]
-		scn.motionCount = scn.currFrame - scn.renderGroup[i][0];
-		if(scn.motionCount >= scn.renderGroup[i][1]){
-			scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = scn.renderGroup[i][8];
-			if(scn.renderGroup[i][9]){
-				scn.renderGroup[i][9]();
-			}
-			scn.renderGroup.splice(i, 1);
-			continue;
-		}
-		scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = Math.trunc(scn.renderGroup[i][5](scn.motionCount, scn.renderGroup[i][6], scn.renderGroup[i][7], scn.renderGroup[i][1])*100 )/100;			
-	}
-	
-	
-	scn.cam.updateProjectionMatrix();
-	scn.renderer.render( scn, scn.cam );
-}
-function animeItem(item, property, paramArr, endVArr, duration, delay=0, endAction=null, ease=easeInOutQuad){
-	duration = Math.trunc(((duration + delay)* 1000)/scn.fps);
-	for (let i = 0; i < paramArr.length; i++){
-		let startV = item[property][paramArr[i]];
-		let deltaV = endVArr[i] - startV;
-		if(i > 0){endAction = null}
-		scn.renderGroup.push( [ scn.currFrame, duration, item, property, [paramArr[i]], ease, startV, deltaV, endVArr[i], endAction ] );
-	}
-	return;
+function easeLinear(t, b, c, d) {
+	return c * t / d + b;
+}	
+function easeInOutQuad(t, b, c, d) {
+	if ((t /= d / 2) < 1) return c / 2 * t * t + b;
+	return -c / 2 * ((--t) * (t - 2) - 1) + b;
 }
 init();
 </script>
