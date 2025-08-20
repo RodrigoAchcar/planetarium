@@ -133,8 +133,8 @@ function pointermove( event ){
 	scn.rCast.setFromCamera( scn.pointer, scn.cam );
 	scn.intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
 	if(!scn.cam.lock){
-		scn.cam.rotation.x += scn.pointer.y/100;
-		scn.cam.rotation.y -= scn.pointer.x/100;
+		scn.cam.rotateX(scn.pointer.y * Math.PI/180);
+		scn.cam.rotateY(scn.pointer.x * -Math.PI/180);
 	}
 	if ( scn.intersects.length > 0 ) {	
 		if(scn.currIntrsc == null){
@@ -164,32 +164,23 @@ function pointerdown( event ) {
 	scn.rCast.setFromCamera( scn.pointer, scn.cam );
 	scn.intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
 	if ( scn.intersects.length > 0 ) {
-		scn.currIntrsc = scn.intersects[0];
-		scn.cam.frameCue = 0;
-		scn.cam.target = scn.currIntrsc.object;
-		scn.cam.targetOffset = scn.cam.target.geometry.boundingSphere.radius * 2;
-		scn.cam.initP = scn.cam.position;
-		scn.cam.rMatrix.lookAt( scn.cam.position, scn.cam.targetP, scn.worldUp );
-		scn.cam.targetQ.setFromRotationMatrix( scn.cam.rMatrix );
-		scn.cam.lock = true;
-
-
+		lockTarget();
 	}
 	if ( scn.intersects.length == 0 ) {
 		scn.cam.lock = false;
-		scn.cam.info = false;
-		if( scn.cam.infoCtnr.children.length > 0 ){
-			for(let i=0; i< scn.cam.infoCtnr.children.length; i++){
-				animeItem(scn.cam.infoCtnr.children[i], 'material', ['opacity'], [0], 1, 0, function(){
-					scn.cam.infoCtnr.children[i].geometry.dispose();
-					scn.cam.infoCtnr.children[i].material.dispose();
-					
-				});
-				
-			}
-			
+		scn.selected = null;
+		if( scn.cam.info ){
+			 hideInfo();
 		}
 	}
+}
+function lockTarget(){
+	scn.currIntrsc = scn.intersects[0];
+	scn.cam.frameCue = 0;
+	scn.cam.target = scn.currIntrsc.object;
+	scn.selected = scn.cam.target.name;
+	scn.cam.targetOffset = scn.cam.target.geometry.boundingSphere.radius * 2;
+	scn.cam.lock = true;
 }
 function cameraLock(){
 	scn.cam.initP = scn.cam.position;
@@ -213,16 +204,9 @@ function cameraLock(){
 		scn.cam.lock = false;
 		scn.cam.info = true;
 		displayInfo();
-
-		return;
 	}
 }
-function cameraInfo(){
-	scn.cam.targetP = scn.cam.target.getWorldPosition( scn.cam.targetP );
-	scn.cam.lookAt(scn.cam.targetP);
-}
 function displayInfo(){
-	//scn.cam.infoCtnr.clear();
 	scn.cam.frameCue = 0;
 	let textFieldPY = 0;
 	for(let i=0; i< scn.objsInfo[scn.cam.target.name].length; i++){
@@ -235,6 +219,28 @@ function displayInfo(){
 	for(let i=0; i< scn.cam.infoCtnr.children.length; i++){
 		animeItem(scn.cam.infoCtnr.children[i], 'material', ['opacity'], [1], 1);
 	}
+}
+function cameraInfo(){
+	scn.cam.targetP = scn.cam.target.getWorldPosition( scn.cam.targetP );
+	scn.cam.lookAt(scn.cam.targetP);
+}
+function hideInfo(){
+	for(let i=0; i< scn.cam.infoCtnr.children.length; i++){
+		animeItem(scn.cam.infoCtnr.children[i], 'material', ['opacity'], [0], 1, 0, function(){
+			if(i == scn.cam.infoCtnr.children.length-1){
+				clearInforCtnr();
+			}
+		});
+	}
+}
+function clearInforCtnr() {
+    for(let i=0; i< scn.cam.infoCtnr.children.length; i++){
+		scn.cam.infoCtnr.children[i].geometry.dispose();
+		scn.cam.infoCtnr.children[i].material.dispose();
+	}
+	scn.cam.infoCtnr.clear();
+	scn.cam.info = false;
+	scn.selected = null;
 }
 function pointerup( event ){}
 function keydown( event ) {
@@ -254,6 +260,8 @@ function keydown( event ) {
 			scn.cam.direction.crossVectors(scn.cam.worldDirection, scn.worldUp).normalize();
 			scn.cam.position.addScaledVector(scn.cam.direction.negate(), scn.cam.speed);
 		}
+		scn.cam.lock = false;
+		scn.cam.info = false;
 	}
 }
 function keyup( event ) {
@@ -388,11 +396,11 @@ function setMeshes(){
 			
 			for(let i = 0; i < scn.meshesSpec[child.name][0].length; i++){
 				let mat = new scn.meshesSpec[child.name][0][i].mat({ fog: false });
-				for( let param of Object.entries(scn.meshesSpec[child.name][0][i].txt) ){
-					mat[param[0]] = scn.textures[child.name][param[1]];
+				for( let texture of Object.entries(scn.meshesSpec[child.name][0][i].txt) ){
+					mat[texture[0]] = scn.textures[child.name][texture[1]];
 				}
-				for( let param of Object.entries(scn.meshesSpec[child.name][0][i].spec) ){
-					mat[param[0]] = param[1];
+				for( let spec of Object.entries(scn.meshesSpec[child.name][0][i].spec) ){
+					mat[spec[0]] = spec[1];
 				}
 				mat.name = scn.meshesSpec[child.name][0][i].txt.map;
 				mat.needsUpdate = true;
@@ -410,6 +418,9 @@ function setMeshes(){
 			scn.meshes[child.name] = mainMesh;
 			geometry.dispose();
 			for(let i = 0; i < materials.length; i++){
+				for( let texture of Object.entries(scn.meshesSpec[child.name][0][i].txt) ){
+					materials[i][texture[0]].dispose();
+				}
 				materials[i].dispose();
 			}
 			if(scn.orbits[child.name]){
@@ -482,6 +493,7 @@ function setScn(){
 	scn.rCast = new Raycaster();
 	scn.intersects = null;
 	scn.currIntrsc = null;
+	scn.selected = null;
 	scn.worldUp = new Vector3(0, 1, 0);
 
 	scn.renderGroup = [];
