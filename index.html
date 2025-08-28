@@ -90,6 +90,7 @@
         <p>Translação: 60190 dias/terra</p>
     </div>
 </div>
+
 <script type="x-shader/x-vertex" id="vertexshader">
 	varying vec2 vUv;
 	void main() {
@@ -105,6 +106,9 @@
 		gl_FragColor = ( texture2D( baseTexture, vUv ) + vec4( 1.0 ) * texture2D( bloomTexture, vUv ) );
 	}
 </script>
+
+
+
 <script type="importmap">
     {
 		"imports": {
@@ -114,7 +118,7 @@
 	}
 </script>
 <script type="module">
-import { Cache, Scene, WebGLRenderer, ACESFilmicToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector2, Vector3, Matrix4, Quaternion, Group, Raycaster, PointLight, Color, SRGBColorSpace, CustomBlending, AdditiveBlending, MaxEquation, CatmullRomCurve3, InstancedBufferGeometry, CircleGeometry, Mesh, MeshStandardMaterial, MeshBasicMaterial, MeshMatcapMaterial, LoadingManager, TextureLoader, Layers, ShaderMaterial } from 'three';
+import { Cache, Scene, WebGLRenderer, ACESFilmicToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector2, Vector3, Matrix4, Quaternion, Group, Raycaster, PointLight, Color, SRGBColorSpace, CustomBlending, AdditiveBlending, MaxEquation, CatmullRomCurve3, InstancedBufferGeometry, InstancedBufferAttribute, Float32BufferAttribute, CircleGeometry, PlaneGeometry, Mesh, MeshStandardMaterial, MeshBasicMaterial, MeshMatcapMaterial, LoadingManager, TextureLoader, Layers, ShaderMaterial, RawShaderMaterial, DoubleSide, Vector4, BufferAttribute } from 'three';
 
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -135,651 +139,12 @@ const requestAnimationFrame = window.requestAnimationFrame || window.mozRequestA
 const cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
 
 const scn = new Scene();
-
 function init(){
 	scn.files = filesLoad();
 	scn.objsInfo = loadTexts();
 	scn.meshesSpec = loadMeshesSpecs();
 	scn.orbits = loadOrbits();
-	scn.objsIntrsc = [];
-	scn.rCastMeshPaths = {};
 	loadFiles(scn.files);
-}
-
-
-function pointerdown( e ) {
-	e.preventDefault();
-	intersectClickEvent(e);
-}
-function touchstart( e ) {
-	e.preventDefault();
-	intersectClickEvent(e);
-}
-function intersectClickEvent(e){
-	e.preventDefault();
-	if ( e.changedTouches ) {
-		if ( e.changedTouches.length > 1 ) { return }
-			e = e.changedTouches[0];
-	}
-	scn.pointer.x = ( e.clientX / scn.canvas.width ) * 2 - 1;
-	scn.pointer.y = - ( e.clientY / scn.canvas.height ) * 2 + 1;
-	scn.rCast.setFromCamera( scn.pointer, scn.cam );
-	scn.intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
-	console.log(scn.intersects.length)
-	if ( scn.intersects.length > 0 ) {
-		if( scn.intersects[0].object.isHud){
-			console.log(scn.intersects[0].object)
-			scn.hud.toggle = true;
-			scn.hud.selected = scn.intersects[0].object;
-			scn.hud.startV.copy(scn.pointer);
-		}
-		if( !scn.intersects[0].object.isHud){
-			console.log(scn.intersects[0].object)
-			scn.currIntrsc = scn.intersects[0].object;
-			lockTarget();
-		}
-	}
-	if ( scn.intersects.length == 0 ) {
-		scn.cam.lock = false;
-		scn.currIntrsc = null;
-		if( scn.cam.info ){
-			 hideInfo();
-		}
-	}
-}
-function pointermove( e ){
-	e.preventDefault();
-	intersectMoveEvent(e);
-}
-function touchmove( e ) {
-	e.preventDefault();
-	intersectMoveEvent(e);
-}
-function intersectMoveEvent(e){
-	e.preventDefault();
-	if ( e.changedTouches ) {
-		if ( e.changedTouches.length > 1 ) { return }
-		e = e.changedTouches[0];
-	}
-	scn.pointer.x = ( e.clientX / scn.canvas.width ) * 2 - 1;
-	scn.pointer.y = - ( e.clientY / scn.canvas.height ) * 2 + 1;
-	/*
-	scn.rCast.setFromCamera( scn.pointer, scn.cam );
-	scn.intersects = scn.rCast.intersectObjects( scn.objsIntrsc, false );
-	if(!scn.cam.lock){
-		scn.cam.rotateX( scn.pointer.y * Math.PI/180 );
-		scn.cam.rotateY(scn.pointer.x * -Math.PI/180);
-	}
-	if ( scn.intersects.length > 0 ) {
-
-			if(scn.currIntrsc == null){
-				//'new'			
-				scn.currIntrsc = scn.intersects[0];
-				animeItem(scn.currIntrsc.object, 'material', ['opacity'], [0.3], 0.5);
-			}
-			if(scn.currIntrsc.object.name != scn.intersects[0].object.name){
-				//'changed'
-				animeItem(scn.currIntrsc.object, 'material', ['opacity'], [0], 0.5);
-				scn.currIntrsc = scn.intersects[0];	
-				animeItem(scn.currIntrsc.object, 'material', ['opacity'], [0.3], 0.5);
-			}
-		
-			if ( scn.intersects.length == 0 ) {
-				if(scn.currIntrsc != null){
-					//'none'
-					animeItem(scn.currIntrsc.object, 'material', ['opacity'], [0], 0.5);
-					scn.currIntrsc = null;
-				}
-			}
-	}
-	*/
-	
-	if(scn.hud.toggle === true){
-		console.log(scn.hud.selected.parent.geometry.boundingSphere.radius)
-		scn.hud.selected.position.x += (scn.pointer.x - scn.hud.startV.x)/scn.hud.selected.parent.geometry.boundingSphere.radius;
-		scn.hud.selected.position.y += (scn.pointer.y - scn.hud.startV.y)/scn.hud.selected.parent.geometry.boundingSphere.radius;
-	}
-}
-function pointerup( e ){
-	e.preventDefault();
-	if(scn.hud.toggle === true){
-		scn.hud.selected.position.x = 0;
-		scn.hud.selected.position.y = 0;
-		scn.hud.toggle = false;
-	}
-}
-function touchend( e ) {
-	e.preventDefault();
-	if(scn.hud.toggle === true){
-		scn.hud.selected.position.x = 0;
-		scn.hud.selected.position.y = 0;
-		scn.hud.toggle = false;
-	}
-}
-function keydown( e ) {
-	if(!scn.cam.lock){
-		scn.cam.velocity += (scn.cam.speed - scn.cam.velocity) * .3;
-		if (e.key === 'ArrowUp') {
-			scn.cam.translateZ(-scn.cam.velocity);
-		}
-		if (e.key === 'ArrowDown') {
-			scn.cam.translateZ(scn.cam.velocity);
-		}
-		if (e.key === 'ArrowRight') {
-			scn.cam.translateX(scn.cam.velocity);
-		}
-		if (e.key === 'ArrowLeft') {
-			scn.cam.translateX(-scn.cam.velocity);
-		}
-		scn.cam.lock = false;
-		scn.cam.info = false;
-	}
-}
-function keyup( e ) {
-}
-function wheel(e){
-	if(!scn.cam.lock){
-		scn.cam.getWorldDirection(scn.cam.worldDirection);
-		if(e.deltaY >= 0){
-			scn.cam.position.addScaledVector(scn.cam.worldDirection.negate(), scn.cam.speed);
-		}
-		if(e.deltaY < 0){
-			scn.cam.position.addScaledVector(scn.cam.worldDirection, scn.cam.speed);
-		}
-	}
-	return;
-}
-function run(){
-	scn.renderer.domElement.addEventListener( 'pointermove', pointermove);
-	scn.renderer.domElement.addEventListener( 'pointerdown', pointerdown );
-	window.addEventListener( 'pointerup', pointerup );
-	/*scn.renderer.domElement.addEventListener( 'touchstart', touchstart);
-	scn.renderer.domElement.addEventListener( 'touchmove', touchmove);
-	window.renderer.domElement.addEventListener( 'touchend', touchend);*/
-	scn.renderer.domElement.addEventListener( 'wheel', wheel );
-	scn.renderer.domElement.addEventListener( 'keyup', keyup );
-	scn.renderer.domElement.addEventListener( 'keydown', keydown );
-	window.addEventListener( 'resize', resize );
-	resize();
-	animate();
-}
-function resize(camera, renderer) {
-	scn.canvas.width = window.innerWidth;
-	scn.canvas.height = window.innerHeight;
-	scn.renderer.setSize( scn.canvas.width, scn.canvas.height );
-	scn.cam.aspect = scn.canvas.width / scn.canvas.height;
-	scn.cam.updateProjectionMatrix();
-	scn.cam.view = calcViewSize( scn.cam.position.distanceTo(scn.hud.position), scn.cam.view );
-	scn.cam.frontPlaneRatio = scn.cam.view.x / scn.cam.view.y;
-	scn.hud.scale.setScalar( scn.cam.frontPlaneRatio/2 );
-
-	
-	scn.hud.position.y = -(scn.hud.children[0].geometry.boundingSphere.radius);
-	scn.hud.children[0].position.x = -(scn.hud.children[0].geometry.boundingSphere.radius);
-
-	scn.hud.children[1].position.x = (scn.hud.children[0].geometry.boundingSphere.radius);
-	scn.infoCtnr.scale.setScalar( scn.cam.frontPlaneRatio );
-	scn.infoCtnr.position.y = (scn.hud.children[0].geometry.boundingSphere.radius);
-	
-}
-
-function lockTarget(){
-	scn.cam.frameCue = 0;
-	scn.cam.target = scn.currIntrsc;
-	scn.selected = scn.cam.target.name;
-	scn.cam.targetOffset = (scn.cam.target.geometry.boundingSphere.radius * 3) + scn.frontPlaneDistance;
-	scn.cam.lock = true;
-}
-function cameraLock(){
-	scn.cam.initP = scn.cam.position;
-	scn.cam.targetP = scn.cam.target.getWorldPosition( scn.cam.targetP );
-	scn.cam.distance = scn.cam.initP.distanceTo(scn.cam.targetP);
-	scn.cam.speed = scn.cam.distance/10;
-	if( scn.cam.distance > scn.cam.targetOffset ){
-		scn.cam.velocity += (scn.cam.speed - scn.cam.velocity) * .3;
-		scn.cam.translateZ(-scn.cam.velocity);
-		
-		scn.cam.rMatrix.lookAt( scn.cam.position, scn.cam.targetP, scn.worldUp );
-		scn.cam.targetQ.setFromRotationMatrix( scn.cam.rMatrix );
-		if ( ! scn.cam.quaternion.equals( scn.cam.targetQ ) ) {
-		const step = (scn.cam.quaternion.angleTo(scn.cam.targetQ) ) * (scn.cam.frameCue/30);
-			scn.cam.quaternion.rotateTowards( scn.cam.targetQ, step );
-		}
-		scn.cam.frameCue++;
-	}
-	if( scn.cam.distance <= scn.cam.targetOffset ){
-		scn.cam.lookAt(scn.cam.targetP);
-		scn.cam.lock = false;
-		scn.cam.info = true;
-		displayInfo();
-	}
-}
-function displayInfo(){
-	scn.cam.frameCue = 0;
-	let textFieldPY = 0;
-	for(let i=0; i< scn.objsInfo[scn.cam.target.name].length; i++){
-		let textField = scn.objsInfo[scn.cam.target.name][i];
-		let textMesh = generateText(textField.text, scn.infoCtnr[textField.tag].style, scn.infoCtnr[textField.tag].size);
-		scn.infoCtnr.add( textMesh );
-		textMesh.position.y = textFieldPY;
-		textFieldPY -= textMesh.bb.h;
-	}
-	for(let i=0; i< scn.infoCtnr.children.length; i++){
-		animeItem(scn.infoCtnr.children[i], 'material', ['opacity'], [1], 1);
-	}
-}
-function cameraInfo(){
-	scn.cam.targetP = scn.cam.target.getWorldPosition( scn.cam.targetP );
-	scn.cam.lookAt(scn.cam.targetP);
-}
-function hideInfo(){
-	for(let i=0; i< scn.infoCtnr.children.length; i++){
-		animeItem(scn.infoCtnr.children[i], 'material', ['opacity'], [0], 1, 0, function(){
-			if(i == scn.infoCtnr.children.length-1){
-				clearInforCtnr();
-			}
-		});
-	}
-}
-function clearInforCtnr() {
-    for(let i=0; i< scn.infoCtnr.children.length; i++){
-		scn.infoCtnr.children[i].geometry.dispose();
-		scn.infoCtnr.children[i].material.dispose();
-	}
-	scn.infoCtnr.clear();
-	scn.cam.info = false;
-	scn.selected = null;
-}
-
-
-function setMeshes(){
-	scn.meshes = {};
-	for( let mesh of Object.entries(scn.models.planetarium['solar-system'].scene.children) ){
-		let child = mesh[1];
-		if(child.isMesh){
-			let geometry = child.geometry;
-			geometry.clearGroups();
-			geometry.addGroup( 0, Infinity, 0 );
-			let mainMesh = new Mesh();
-			let materials = [];
-			
-			//if in scn.orbits it has raycast
-			if(scn.orbits[child.name]){
-				geometry = new InstancedBufferGeometry().copy(child.geometry);
-				geometry.clearGroups();
-				geometry.addGroup( 0, Infinity, 0 );
-				geometry.instanceCount = 1;
-				
-				if(scn.meshesSpec[child.name].length > 1){
-					geometry.clearGroups();
-					for(let i = 0; i <= scn.meshesSpec[child.name].length; i++){
-						geometry.addGroup( 0, Infinity, i );
-					}
-					geometry.instanceCount = scn.meshesSpec[child.name].length+1;
-					for(let i = 1; i < scn.meshesSpec[child.name].length; i++){
-						let mats = [];
-						for(let j = 0; j < scn.meshesSpec[child.name][i].length; j++){
-							let mat = new scn.meshesSpec[child.name][i][j].mat({ fog: false });
-							for( let param of Object.entries(scn.meshesSpec[child.name][i][j].txt) ){
-								mat[param[0]] = scn.textures[child.name][param[1]];
-							}
-							for( let param of Object.entries(scn.meshesSpec[child.name][i][j].spec) ){
-								mat[param[0]] = param[1];
-							}
-							mat.name = scn.meshesSpec[child.name][i][j].txt.map;
-							mat.needsUpdate = true;
-							mats.push(mat);
-						}
-						let mesh = new Mesh(geometry, mats);
-						mesh.name = scn.meshesSpec[child.name][i][0].txt.map;
-						mainMesh.add(mesh);
-						
-						if(mesh.name === 'earthClouds-map'){
-							mesh.scale.setScalar(1.008);
-						}
-						for(let i = 0; i < mats.length; i++){
-							mats[i].dispose();
-						}
-					}
-				}
-				const raycastMat = new MeshBasicMaterial( { color: scn.orbits[child.name].color, transparent: true, opacity: 0, depthWrite : false } );
-				let raycast = new Mesh(geometry, raycastMat);
-				raycast.scale.setScalar(1.04);
-				raycast.name = child.name;
-				raycast.renderOrder = 2;
-				scn.objsIntrsc.push(raycast);
-				scn.rCastMeshPaths[child.name] = raycast;
-				mainMesh.add(raycast);
-				raycastMat.dispose();
-			}
-			
-			for(let i = 0; i < scn.meshesSpec[child.name][0].length; i++){
-				let mat = new scn.meshesSpec[child.name][0][i].mat({ fog: false });
-				for( let texture of Object.entries(scn.meshesSpec[child.name][0][i].txt) ){
-					mat[texture[0]] = scn.textures[child.name][texture[1]];
-				}
-				for( let spec of Object.entries(scn.meshesSpec[child.name][0][i].spec) ){
-					mat[spec[0]] = spec[1];
-				}
-				mat.name = scn.meshesSpec[child.name][0][i].txt.map;
-				mat.needsUpdate = true;
-				materials.push(mat);
-			}
-			
-			mainMesh.geometry = geometry;
-			mainMesh.scale.normalize();
-			mainMesh.material = materials;
-			mainMesh.castShadow  = true;
-			mainMesh.receiveShadow = true;
-			mainMesh.name = child.name;
-			mainMesh.renderOrder = 2;
-			scn.add(mainMesh);
-			scn.meshes[child.name] = mainMesh;
-			
-			geometry.dispose();
-			for(let i = 0; i < materials.length; i++){
-				for( let texture of Object.entries(scn.meshesSpec[child.name][0][i].txt) ){
-					materials[i][texture[0]].dispose();
-				}
-				materials[i].dispose();
-			}
-			if(scn.orbits[child.name]){
-				mainMesh.rotation.z = scn.orbits[child.name].axis;
-			}
-		}
-		if(child.isLineSegments){
-			let objToPathName = child.name.split('-orbit')[0];
-			let pathPoints = child.geometry.attributes.position.array;
-			let curveV3coords = [];							
-			for(let i = 0; i < pathPoints.length; i+=3){
-				curveV3coords.push(new Vector3(pathPoints[i], pathPoints[i+1], pathPoints[i+2] ));
-			}
-			let curve = new CatmullRomCurve3( curveV3coords );
-			curve.curveType = 'centripetal';
-			curve.closed = true;
-			if(objToPathName !== 'sun'){
-				const points = curve.getPoints( scn.orbits[objToPathName].subDivs );
-				let geometry = new LineGeometry().setFromPoints( points );
-				let matLine = new LineMaterial( {
-					color: scn.orbits[objToPathName].color,
-					linewidth: 4,
-					dashed: true,
-					dashScale : 0,
-					transparent: true, opacity: 0.05, depthWrite : false
-				} );
-				
-				let line = new Line2( geometry, matLine );
-				line.computeLineDistances();
-				line.scale.set( 1, 1, 1 );
-				line.renderOrder = 0;
-				scn.add( line );
-				geometry.dispose();
-				matLine.dispose();
-			}
-			scn.orbits[objToPathName]['curve'] = curve;
-			scn.orbits[objToPathName]['object'] = scn.meshes[objToPathName];
-			scn.orbits[objToPathName]['raycast'] = scn.rCastMeshPaths[objToPathName];
-			
-		}
-	}
-	scn.meshes['saturn'].add(scn.meshes['saturnRing']);
-	scn.meshes['uranus'].add(scn.meshes['uranusRing']);
-	scn.meshes['galaxy'].renderOrder = 0;
-	for(let textures of Object.values(scn.textures) ){
-		for(let texture of Object.values(textures) ){
-			texture.dispose();
-		}
-	}
-	scn.models.planetarium['solar-system'].scene.traverse(function(object){
-		if( object.isMesh ){
-			object.geometry.dispose();
-		}
-	});
-	delete scn.textures;
-	delete scn.models;
-	delete scn.meshesSpec;
-	setScn();
-}
-function setScn(){
-	scn.fps = 60;
-	scn.currFrame = 0;
-	scn.motionCount = 0;
-	scn.canvas = document.getElementById("canvas");
-	scn.canvas.width = window.innerWidth;
-	scn.canvas.height = window.innerHeight;
-	
-	scn.pointer = new Vector2();
-	scn.rCast = new Raycaster();
-	scn.intersects = [];
-	scn.currIntrsc = null;
-	scn.selected = null;
-	scn.worldUp = new Vector3(0, 1, 0);
-	scn.worldScale = new Vector3(1, 1, 1);
-	
-
-	scn.renderGroup = [];
-	scn.renderer = setRenderer();
-	scn.cam = setCamera();
-	scn.add(scn.cam);
-	scn.sunLight = setLights();
-	scn.add( scn.sunLight );
-
-	scn.frontPlaneDistance = 8;
-	scn.infoCtnr = setInfoCtnr();
-	scn.add(scn.infoCtnr);
-	scn.hud = setHud();
-	scn.add(scn.hud);
-	setBloomPass();
-	scn.then = performance.now();
-	scn.now = performance.now();
-
-	scn.cam.position.set( -60, 2, (120+scn.frontPlaneDistance) );
-
-	scn.cam.add(scn.infoCtnr);
-
-	scn.cam.add(scn.hud);
-
-	run();
-}
-function setRenderer(){
-	let renderer = new WebGLRenderer( { canvas: scn.canvas, antialias: true, alpha: false, precision: "highp", premultipliedAlpha: false } );
-	renderer.setSize( scn.canvas.width, scn.canvas.height );
-	renderer.setPixelRatio( window.devicePixelRatio );
-	renderer.toneMapping = ACESFilmicToneMapping;
-	renderer.shadowMap.enable = true;
-	renderer.shadowMap.type = PCFSoftShadowMap;
-	renderer.physicallyCorrectLights = true;	
-	renderer.sortObjects = false;				
-	return renderer;
-}
-function setCamera(){
-	let camera = new PerspectiveCamera( 35, scn.canvas.width /scn.canvas.height, 0.01, 100000 );
-	camera.scale.normalize();
-	camera.view = new Vector2( 1, 1 );
-	camera.frontPlaneRatio = camera.view.x / camera.view.y;
-	camera.frameCue = 0;
-	camera.lock = false;
-	camera.info = false;
-	camera.initP = new Vector3();
-	camera.distance = null;
-	camera.target = null;
-	camera.targetP = new Vector3();
-	camera.targetQ = new Quaternion();
-	camera.targetOffset = null;
-	camera.worldDirection = new Vector3();
-	camera.getWorldDirection(camera.worldDirection); 
-	camera.direction = new Vector3();
-	camera.rMatrix = new Matrix4();
-	camera.velocity = 0.0;
-	camera.speed = 0.8;
-	return camera;
-}
-function setInfoCtnr(){
-	let infoCtnr = new Group();
-	infoCtnr.h2 = { style: scn.fonts.rubik['Rubik-Bold'], size: 0.5 };
-	infoCtnr.p = { style: scn.fonts.rubik['Rubik-Regular'], size: 0.24 };
-	infoCtnr.position.z = -scn.frontPlaneDistance;
-	infoCtnr.renderOrder = 4;
-	return infoCtnr;
-}
-
-function setHud(){
-	let hud = new Group();
-	hud.startV = new Vector2();
-	hud.objs = loadHudObjs();
-	
-	for( let geos of Object.values(hud.objs) ){
-		geos.builder(hud, geos);
-	}
-	delete hud.objs;
-	hud.position.z = -scn.frontPlaneDistance;
-	hud.renderOrder = 4;
-	hud.toggle = false;
-	hud.pressed = [];
-	return hud;
-}
-function setStick(group, geos){
-	let buffer = new geos.geometry(geos.size, geos.subDivs);
-	buffer.computeBoundingSphere();
-	buffer.computeBoundingBox();
-	let geometry = new InstancedBufferGeometry().copy(buffer);
-	geometry.clearGroups();
-	let meshesObj = {};
-	for(let i = 0; i < geos.meshes.length; i++){
-		geometry.addGroup( 0, Infinity, i );
-		let mat = new geos.meshes[i].mat(geos.meshes[i].spec);
-		let mesh = new Mesh(geometry, mat);
-		mesh.scale.normalize();
-		mesh.name = geos.meshes[i].name;
-		mesh.afterSpec = geos.meshes[i].afterSpec;
-		meshesObj[mesh.name] = mesh;
-		mat.dispose();
-	}
-	geometry.instanceCount = geos.meshes.length;
-	for( let mesh of Object.values(meshesObj) ){
-		if(mesh.afterSpec.parent){
-			meshesObj[mesh.afterSpec.parent].add(mesh);
-			mesh.getWorldScale(scn.worldScale);
-			mesh.scale.setScalar(mesh.afterSpec.scale);
-		}
-		if(!mesh.afterSpec.parent){
-			group.add(mesh);
-		}
-		if(mesh.afterSpec.rCast){
-			mesh.isHud = true;
-			mesh.objName = mesh.afterSpec.objName;
-			scn.objsIntrsc.push(mesh);
-		}
-		delete mesh.afterSpec;
-	}
-	buffer.dispose();
-	meshesObj = null;
-	return;
-}
-function loadHudObjs(){
-	return {
-		stick: {
-			builder: setStick, geometry: CircleGeometry, size:2, subDivs:64, meshes: 
-			[
-				{ name: 'stickTranslate', mat: MeshMatcapMaterial, spec: {color: 0xaaaaaa, transparent: true, depthWrite: false, opacity: 0.2 }, afterSpec: { scale: 1, rCast: false}  }, 
-				{ name: 'stickT', mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, afterSpec: { isHud: true, objName: 'stick', scale: 0.6, rCast: true, parent: 'stickTranslate' } },
-				{ name: 'stickRotate', mat: MeshMatcapMaterial, spec: {color: 0xaaaaaa, transparent: true, depthWrite: false, opacity: 0.2 }, afterSpec: { scale: 1, rCast: false} }, 
-				{ name: 'stickR', parent: 'stickRotate', mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, afterSpec: { isHud: true, objName: 'stick', scale: 0.6, rCast: true, parent: 'stickRotate' } }
-			]
-		}
-	}
-}
-
-function setLights(){
-	let sunLight = new PointLight( 0xffffff, 100000);
-	sunLight.power = 500000;
-	sunLight.castShadow = true;
-	sunLight.shadow.mapSize.width = 512; // default
-	sunLight.shadow.mapSize.height = 512; // default
-	sunLight.shadow.camera.near = 0.5; // default
-	sunLight.shadow.camera.far = 5000; // default				
-	sunLight.position.set( 0, 0, 0 );
-	sunLight.needsUpdate = true;
-	return sunLight;
-}
-function animate() {
-	if( scn.now - scn.then >= scn.fps){
-		scn.then = performance.now();
-		render();
-	}
-	scn.now = performance.now();
-	requestAnimationFrame(animate);
-}
-function render(){
-	scn.currFrame++;
-	for( let key of Object.entries(scn.orbits) ){
-		scn.meshes[key[0]].position.copy(key[1].curve.getPointAt( (scn.currFrame/key[1].subDivs * key[1].translation / 10) % key[1].subDivs/key[1].subDivs ) );
-		scn.meshes[key[0]].rotation.y += key[1].rotation;
-	}
-	scn.meshes['earth'].children[0].rotation.y += 0.003;
-	if(scn.cam.lock){ cameraLock(); }
-	if(scn.cam.info){ cameraInfo(); }
-	for(let i = 0; i < scn.renderGroup.length; i++){
-		// [ startFrame, duration(seconds), item, property, param, ease, startV, deltaV, endV, endAction ]
-		scn.motionCount = scn.currFrame - scn.renderGroup[i][0];
-		if(scn.motionCount >= scn.renderGroup[i][1]){
-			scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = scn.renderGroup[i][8];
-			if(scn.renderGroup[i][9]){
-				scn.renderGroup[i][9]();
-			}
-			scn.renderGroup.splice(i, 1);
-			continue;
-		}
-		scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = Math.trunc(scn.renderGroup[i][5](scn.motionCount, scn.renderGroup[i][6], scn.renderGroup[i][7], scn.renderGroup[i][1])*100 )/100;			
-	}
-	scn.cam.updateProjectionMatrix();
-	scn.renderer.render( scn, scn.cam );
-	//scn.bloomComposer.render();
-	//scn.finalComposer.render();
-}
-function setBloomPass(){
-	let BLOOM_SCENE = 1;
-	scn.bloomLayer = new Layers();
-	scn.bloomLayer.set( BLOOM_SCENE );
-
-	scn.meshes['sun'].layers.enable( BLOOM_SCENE );
-
-	scn.renderScene = new RenderPass( scn, scn.cam );
-	scn.bloomPass = new UnrealBloomPass( new Vector2( scn.canvas.width, scn.canvas.width ), 1.5, 0.4, 0.85 );
-	scn.bloomPass.threshold = 0.1;
-	scn.bloomPass.strength = 0.1;
-	scn.bloomPass.radius = 0.01;
-	scn.bloomComposer = new EffectComposer( scn.renderer );
-	scn.bloomComposer.renderToScreen = false;
-	scn.bloomComposer.addPass( scn.renderScene );
-	scn.bloomComposer.addPass( scn.bloomPass );
-	scn.mixPass = new ShaderPass(
-		new ShaderMaterial( {
-			uniforms: {
-				baseTexture: { value: null },
-				bloomTexture: { value: scn.bloomComposer.renderTarget2.texture }
-			},
-			vertexShader: document.getElementById( 'vertexshader' ).textContent,
-			fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
-			defines: {}
-		} ), 'baseTexture'
-	);
-	scn.mixPass.needsSwap = true;
-	scn.outputPass = new OutputPass();
-	scn.finalComposer = new EffectComposer( scn.renderer );
-	scn.finalComposer.addPass( scn.renderScene );
-	scn.finalComposer.addPass( scn.mixPass );
-	scn.finalComposer.addPass( scn.outputPass );
-}
-function animeItem(item, property, paramArr, endVArr, duration, delay=0, endAction=null, ease=easeInOutQuad){
-	duration = Math.trunc(((duration + delay)* 1000)/scn.fps);
-	for (let i = 0; i < paramArr.length; i++){
-		let startV = item[property][paramArr[i]];
-		let deltaV = endVArr[i] - startV;
-		if(i > 0){endAction = null}
-		scn.renderGroup.push( [ scn.currFrame, duration, item, property, [paramArr[i]], ease, startV, deltaV, endVArr[i], endAction ] );
-	}
-	return;
 }
 async function loadFiles(filesObj){
 	const manager = new LoadingManager();
@@ -816,8 +181,365 @@ async function loadFiles(filesObj){
 	if(loadCount == filesLoadQtd){
 		//console.log('loading complete');
 		delete scn.files;
-		setMeshes();
+		setScn();
 	}
+}
+function setScn(){
+	scn.fps = 30;
+	scn.currFrame = 0;
+	scn.motionCount = 0;
+	scn.canvas = document.getElementById("canvas");
+	scn.canvas.width = window.innerWidth;
+	scn.canvas.height = window.innerHeight;
+	
+	scn.pointer = new Vector2();
+	scn.rCast = new Raycaster();
+	scn.intersects = [];
+	
+	scn.selected = null;
+	scn.worldUp = new Vector3(0, 1, 0);
+	scn.worldScale = new Vector3(1, 1, 1);
+	scn.frontPlaneDistance = 8;
+	scn.renderGroup = [];
+	scn.then = performance.now();
+	scn.now = performance.now();
+	
+	scn.currIntrsc = null;
+	scn.targetP = new Vector3();
+	scn.targetQ = new Quaternion();
+	scn.targetOffset = null;
+	
+	scn.renderer = setRenderer();
+	setBloomPass();
+	scn.add(setCamera() );
+	scn.add( setLights() );
+	
+	setMeshes();
+}
+function setCamera(){
+	let camera = new PerspectiveCamera( 35, scn.canvas.offsetWidth/ scn.canvas.offsetHeight, 0.01, 100000 );
+	camera.name = 'cam';
+	camera.scale.normalize();
+	camera.view = new Vector2( 1, 1 );
+	
+	camera.frontPlaneRatio = camera.view.x / camera.view.y;
+	camera.frameCue = 0;
+	camera.lock = false;
+	camera.info = false;
+	camera.initP = new Vector3();
+	camera.distance = null;
+	camera.worldDirection = new Vector3();
+	camera.getWorldDirection(camera.worldDirection); 
+	camera.direction = new Vector3();
+	camera.rMatrix = new Matrix4();
+	camera.velocity = 0.0;
+	camera.speed = 0.8;
+	
+	let frame = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({color: 0x8888aa, transparent: true, opacity: 0.2, depthWrite: false}) );
+	frame.name = 'frame';
+	frame.geometry.computeBoundingBox();
+	frame.scale.normalize();
+	frame.position.z = -scn.frontPlaneDistance;
+	camera.add(frame);
+	frame.geometry.dispose();
+	frame.material.dispose();
+	
+	camera.add(setHud( camera ));
+	camera.add(setInfoCtnr());
+	camera.position.set( 0, 2, (120+scn.frontPlaneDistance) );
+	
+	return camera;
+}
+function setMeshes(){
+	let rayBodies = new Group();
+	rayBodies.name = 'rayBodies';
+	scn.add(rayBodies);
+	let orbitPaths = new Group();
+	orbitPaths.name = 'orbitPaths';
+	scn.add(orbitPaths);
+	for( let mesh of Object.entries(scn.models.planetarium['solar-system'].scene.children) ){
+		let child = mesh[1];
+		if(child.isMesh){
+			let geometry = child.geometry;
+			geometry.clearGroups();
+			geometry.addGroup( 0, Infinity, 0 );
+			let mainMesh = new Mesh();
+			let materials = [];
+			
+			if(scn.orbits[child.name]){
+				geometry = new InstancedBufferGeometry().copy(child.geometry);
+				geometry.clearGroups();
+				geometry.addGroup( 0, Infinity, 0 );
+				geometry.instanceCount = 1;
+				
+				if(scn.meshesSpec[child.name].length > 1){
+					geometry.clearGroups();
+					for(let i = 0; i <= scn.meshesSpec[child.name].length; i++){
+						geometry.addGroup( 0, Infinity, i );
+					}
+					geometry.instanceCount = scn.meshesSpec[child.name].length+1;
+					for(let i = 1; i < scn.meshesSpec[child.name].length; i++){
+						let mats = [];
+						for(let j = 0; j < scn.meshesSpec[child.name][i].length; j++){
+							let mat = new scn.meshesSpec[child.name][i][j].mat({ fog: false });
+							for( let param of Object.entries(scn.meshesSpec[child.name][i][j].txt) ){
+								mat[param[0]] = scn.textures[child.name][param[1]];
+							}
+							for( let param of Object.entries(scn.meshesSpec[child.name][i][j].spec) ){
+								mat[param[0]] = param[1];
+							}
+							mat.name = scn.meshesSpec[child.name][i][j].txt.map;
+							mat.needsUpdate = true;
+							mats.push(mat);
+						}
+						let mesh = new Mesh(geometry, mats);
+						mesh.name = scn.meshesSpec[child.name][i][0].txt.map;
+						mesh.scale.normalize();
+						mainMesh.add(mesh);
+						
+						if(mesh.name === 'earthClouds-map'){
+							mesh.scale.setScalar(1.02);
+						}
+						for(let i = 0; i < mats.length; i++){
+							mats[i].dispose();
+						}
+					}
+				}
+			}
+			for(let i = 0; i < scn.meshesSpec[child.name][0].length; i++){
+				let mat = new scn.meshesSpec[child.name][0][i].mat({ fog: false });
+				for( let texture of Object.entries(scn.meshesSpec[child.name][0][i].txt) ){
+					mat[texture[0]] = scn.textures[child.name][texture[1]];
+				}
+				for( let spec of Object.entries(scn.meshesSpec[child.name][0][i].spec) ){
+					mat[spec[0]] = spec[1];
+				}
+				mat.name = scn.meshesSpec[child.name][0][i].txt.map;
+				mat.needsUpdate = true;
+				materials.push(mat);
+			}
+			mainMesh.geometry = geometry;
+			mainMesh.scale.normalize();
+			mainMesh.material = materials;
+			mainMesh.castShadow  = true;
+			mainMesh.receiveShadow = true;
+			mainMesh.name = child.name;
+			mainMesh.renderOrder = 2;
+			scn.add(mainMesh);
+			
+			//if in scn.objsInfo it has raycast
+			if(scn.objsInfo[child.name]){
+				const raycastMat = new MeshBasicMaterial( { color: scn.orbits[child.name].color, transparent: true, opacity: 0, depthWrite : false } );
+				let raycast = new Mesh(geometry, raycastMat);
+				raycast.scale.normalize();
+				raycast.scale.setScalar(0.6);
+				raycast.name = child.name;
+				raycast.renderOrder = 3;
+				rayBodies.add(raycast);
+				raycastMat.dispose();
+			}
+			
+			geometry.dispose();
+			for(let i = 0; i < materials.length; i++){
+				for( let texture of Object.entries(scn.meshesSpec[child.name][0][i].txt) ){
+					materials[i][texture[0]].dispose();
+				}
+				materials[i].dispose();
+			}
+			if(scn.orbits[child.name]){
+				mainMesh.rotation.z = scn.orbits[child.name].axis;
+			}
+		}
+		
+		if(child.isLineSegments){
+			let objToPathName = child.name.split('-orbit')[0];
+			let pathPoints = child.geometry.attributes.position.array;
+			let curveV3coords = [];							
+			for(let i = 0; i < pathPoints.length; i+=3){
+				curveV3coords.push(new Vector3(pathPoints[i], pathPoints[i+1], pathPoints[i+2] ));
+			}
+			let curve = new CatmullRomCurve3( curveV3coords );
+			curve.curveType = 'centripetal';
+			curve.closed = true;
+			if(objToPathName !== 'sun'){
+				const points = curve.getPoints( scn.orbits[objToPathName].subDivs );
+				let geometry = new LineGeometry().setFromPoints( points );
+				let matLine = new LineMaterial( {
+					color: scn.orbits[objToPathName].color,
+					linewidth: 4,
+					dashed: true,
+					dashScale : 0,
+					transparent: true, opacity: 0.05, depthWrite : false
+				} );
+				let line = new Line2( geometry, matLine );
+				line.computeLineDistances();
+				line.scale.set( 1, 1, 1 );
+				line.renderOrder = 0;
+				line.name = objToPathName;
+				orbitPaths.add( line );
+				geometry.dispose();
+				matLine.dispose();
+			}
+			scn.orbits[objToPathName]['curve'] = curve;
+		}
+	}
+	getMesh(scn, 'saturn').add(getMesh(scn, 'saturnRing'))
+	getMesh(scn, 'uranus').add(getMesh(scn, 'uranusRing'))
+	getMesh(scn, 'galaxy').renderOrder = 0;
+	for(let textures of Object.values(scn.textures) ){
+		for(let texture of Object.values(textures) ){
+			texture.dispose();
+		}
+	}
+	scn.models.planetarium['solar-system'].scene.traverse(function(object){
+		if( object.isMesh ){
+			object.geometry.dispose();
+			object.material.dispose();
+		}
+		if(object.isLineSegments){
+			object.geometry.dispose();
+		}
+	});
+	delete scn.textures;
+	delete scn.models;
+	delete scn.meshesSpec;
+	getMesh(scn, 'sun').layers.enable( 1 );
+	run();
+}
+function run(cam = getMesh(scn, 'cam')){
+	scn.renderer.domElement.addEventListener( 'pointermove', pointermove);
+	scn.renderer.domElement.addEventListener( 'pointerdown', pointerdown );
+	window.addEventListener( 'pointerup', pointerup );
+/*	
+	scn.renderer.domElement.addEventListener( 'touchstart', touchstart);
+	scn.renderer.domElement.addEventListener( 'touchmove', touchmove);
+	window.addEventListener( 'touchend', touchend);
+*/	
+	document.addEventListener( 'wheel', wheel );
+	document.addEventListener( 'keyup', keyup );
+	document.addEventListener( 'keydown', keydown );
+	window.addEventListener( 'resize', resize );
+	resize();
+	animate();
+}
+function resize() {
+	let cam = getMesh(scn, 'cam');
+	scn.renderer.setSize( scn.canvas.parentElement.clientWidth, scn.canvas.parentElement.clientHeight  );
+	cam.aspect = scn.canvas.offsetWidth/ scn.canvas.offsetHeight;
+	cam.fov = Math.round(((scn.canvas.offsetWidth*scn.canvas.offsetHeight) / scn.canvas.offsetWidth)/18);
+	cam.updateProjectionMatrix();
+	cam.view = calcViewSize( scn.frontPlaneDistance, cam.view ) ;
+	cam.frontPlaneRatio = cam.view.x / cam.view.y;
+	
+	getMesh(cam, 'hud').bb.width = cam.view.x;
+	getMesh(cam, 'hud').bb.height = (cam.view.y/cam.view.x);
+	getMesh(cam, 'hud').bb.y = (-getMesh(scn, 'cam').view.y/2) + getMesh(cam, 'hud').bb.height/2;
+	getMesh(cam, 'hud').position.z = -scn.frontPlaneDistance;
+	getMesh(cam, 'frame').scale.set( getMesh(cam, 'hud').bb.width, getMesh(cam, 'hud').bb.height, 0 );
+	getMesh(cam, 'frame').position.y = getMesh(cam, 'hud').bb.y;
+
+	for( let i = 0; i < getMesh(cam, 'hud').children.length; i++ ){
+		let btn = getMesh(cam, 'hud').children[i];
+		let x = (btn.bb.width * btn.layout.x);
+		let y = getMesh(cam, 'hud').bb.y;
+		let scale = getMesh(cam, 'hud').bb.height * btn.layout.scale;
+		btn.position.set(x, y, 0);
+		btn.scale.set(scale, scale, 1);
+		btn.startV.set(x, y, 0);
+		console.log(btn)
+	}
+	getMesh(cam, 'infoCtnr').scale.setScalar( cam.frontPlaneRatio );
+	getMesh(cam, 'infoCtnr').position.y = -getMesh(cam, 'hud').bb.y;
+	cam.hudPercent = -((((cam.view.y/2)-getMesh(cam, 'frame').scale.y)*100)/(cam.view.y/2))/100;
+}
+
+//[ geometry[{material{txt,spec}}] ] 
+function loadMeshesSpecs(){
+	return {
+		earth : [
+		[ { mat: MeshStandardMaterial, txt:{map: 'earthDay-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthDay-metalnessMap'}, spec: {roughness: 1, metalness: 1, anisotropy: 0.2,  bumpScale: 0.001, transparent: true, depthWrite : false, 
+		blending: CustomBlending, 
+		blendEquation: MaxEquation,
+		}} , { mat: MeshStandardMaterial, txt:{map: 'earthNight-map', lightMap: 
+		'earthNight-map', bumpMap: 'earthDay-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 8, bumpScale: 0.001
+		}} ],
+		[{ mat: MeshStandardMaterial, txt:{map: 'earthClouds-map', alphaMap: 'earthClouds-map', displacementMap: 'earthClouds-map'}, spec: {displacementScale: 0.08, roughness: 1, metalness: 0, transparent: true, depthWrite : false, opacity: 0.6 }} ]
+		],
+		galaxy: [[ 
+		{ mat: MeshBasicMaterial, txt:{map:'galaxy-map', lightMap:'galaxy-map'}, spec: {lightMapIntensity: 2.0}}
+		]],
+		sun: [[ { mat: MeshStandardMaterial, txt:{map:'sun-map', lightMap: 'sun-map', emissiveMap: 'sun-map', bumpMap: 'sun-bumpMap'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 8, emissive: new Color(0.7, 0.4, 0), emissiveIntensity: 2, bumpScale: 1} } ]],
+
+		mercury: [[ { mat: MeshStandardMaterial, txt:{map:'mercury-map', bumpMap: 'mercury-bumpMap'}, spec: {roughness: 0, metalness: 0, bumpScale: 0.02} } ]],
+		
+		venus: [[ { mat: MeshStandardMaterial, txt:{map:'venus-map', bumpMap: 'venus-bumpMap'}, spec: {roughness: 0.1, metalness: 0, bumpScale: 0.02} } ]],
+		
+		mars: [[ { mat: MeshStandardMaterial, txt:{map:'mars-map', bumpMap: 'mars-bumpMap'}, spec: {roughness: 1, metalness: 0, bumpScale: 0.02} } ]],
+		
+		jupiter: [[ { mat: MeshStandardMaterial, txt:{map:'jupiter-map'}, spec: {roughness: 0, metalness: 0} } ]],
+		
+		saturn: [[ { mat: MeshStandardMaterial, txt:{map:'saturn-map'}, spec: {roughness: 0, metalness: 0} } ]],
+		
+		saturnRing: [[ { mat: MeshStandardMaterial, txt:{map:'saturnRing-map', lightMap: 'saturnRing-map',alphaMap: 'saturnRing-alphaMap'}, spec: {roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, depthWrite : false, blending: AdditiveBlending} } ]],
+		
+		uranus: [[ { mat: MeshStandardMaterial, txt:{map:'uranus-map'}, spec: {roughness: 0, metalness: 0} } ]],
+		
+		uranusRing: [[ { mat: MeshStandardMaterial, txt:{map:'uranusRing-map', lightMap: 'uranusRing-map',alphaMap: 'uranusRing-alphaMap'}, spec: {roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, depthWrite : false, blending: AdditiveBlending} } ]],
+		
+		neptune: [[ { mat: MeshStandardMaterial, txt:{map:'neptune-map'}, spec: {roughness: 0, metalness: 0} } ]],
+		
+		pluto: [[ { mat: MeshStandardMaterial, txt:{map:'pluto-map', bumpMap: 'pluto-bumpMap'}, spec: {roughness: 0, metalness: 0, bumpScale: 0.02} } ]]
+	}
+}
+function loadOrbits(){
+	return {
+	sun: {translation: 29.78, rotation: 0.0006875, axis: 0, color: 0xd84b10, subDivs: 20},
+	mercury: {translation: 47.87, rotation: 0.0083, axis: Math.PI/180 * -0.1, color: 0x5e2902, subDivs: 40},
+	venus: {translation: 35.02, rotation: 0.00652, axis: Math.PI/180 * -177, color: 0x803710, subDivs: 60},
+	earth: {translation: 29.78, rotation: 0.01574, axis: Math.PI/180 * 23, color: 0x14425b, subDivs: 100},
+	mars: {translation: 24.077, rotation: 0.00866, axis: Math.PI/180 * -25, color: 0x81524b, subDivs: 140},
+	jupiter: {translation:13.07, rotation: 0.0045583, axis: Math.PI/180 * -3, color: 0xae6137, subDivs: 180},
+	saturn: {translation: 9.69, rotation: 0.0036840, axis: Math.PI/180 * -27, color: 0xd9b383, subDivs: 220},
+	uranus: {translation: 6.81, rotation: 0.0014794, axis: Math.PI/180 * -98, color: 0x9fb6c3, subDivs: 260},
+	neptune: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x5a69b6, subDivs: 320},
+	pluto: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x535c6b, subDivs: 360}
+	}
+}
+
+function calcViewSize(depth, target){
+	return getMesh(scn, 'cam').getViewSize(depth, target );
+}
+function easeLinear(t, b, c, d) {
+	return c * t / d + b;
+}	
+function easeInOutQuad(t, b, c, d) {
+	if ((t /= d / 2) < 1) return c / 2 * t * t + b;
+	return -c / 2 * ((--t) * (t - 2) - 1) + b;
+}
+function generateText(textContent, fontStyle, fontSize){
+	let geometry = new TextGeometry( textContent, {
+		font: fontStyle,
+		size: fontSize,
+		height: 0.0,
+		depth: 0.0,
+		curveSegments: 1.4,
+		bevelEnabled: false,
+		bevelThickness: 0,
+		bevelSize: 0,
+	} );
+	geometry.clearGroups();
+	geometry.computeBoundingBox();
+	let textMat = new MeshMatcapMaterial( { color: 0xffffff, transparent: true, fog: false } );
+	let textMesh = new Mesh( geometry, textMat );
+	textMesh.material.opacity = 0;
+	let width = Math.trunc( Math.abs(textMesh.geometry.boundingBox.min.x - textMesh.geometry.boundingBox.max.x) *1000)/1000 ;
+	let height = Math.trunc( Math.abs(textMesh.geometry.boundingBox.min.y - textMesh.geometry.boundingBox.max.y) *1000)/1000 ;
+	textMesh.geometry.translate(-width/2, -height, 0);
+	textMesh.bb = {w:width, h:height};
+	geometry.dispose();
+	textMat.dispose();
+	textMesh.scale.normalize();
+	return textMesh;	
 }
 function loadFile(loaderClass, filePath) {
 	return new Promise((resolve) => {
@@ -827,17 +549,379 @@ function loadFile(loaderClass, filePath) {
 		});
 	});
 }
+function getMesh( parent, name ){
+	return parent.children[ parent.children.findIndex(item => item.name === name) ];
+}
+function clamp(val, min, max) {
+    return Math.trunc( (val > max ? max : val < min ? min : val) * 10000) / 10000;
+}
+function animeItem(item, property, paramArr, endVArr, duration, delay=0, endAction=null, ease=easeInOutQuad){
+	duration = Math.trunc(((duration + delay)* 1000)/scn.fps);
+	for (let i = 0; i < paramArr.length; i++){
+		let startV = item[property][paramArr[i]];
+		let deltaV = endVArr[i] - startV;
+		if(i > 0){endAction = null}
+		scn.renderGroup.push( [ scn.currFrame, duration, item, property, [paramArr[i]], ease, startV, deltaV, endVArr[i], endAction ] );
+	}
+	return;
+}
+
+function setRenderer(){
+	let renderer = new WebGLRenderer( { canvas: scn.canvas, antialias: true, alpha: false, precision: "highp", premultipliedAlpha: false } );
+	renderer.setSize( scn.canvas.offsetWidth, scn.canvas.offsetHeight );
+	renderer.setPixelRatio( window.devicePixelRatio );
+	renderer.toneMapping = ACESFilmicToneMapping;
+	renderer.shadowMap.enable = true;
+	renderer.shadowMap.type = PCFSoftShadowMap;
+	renderer.physicallyCorrectLights = true;	
+	renderer.sortObjects = false;				
+	return renderer;
+}
+function setBloomPass(){
+	let BLOOM_SCENE = 1;
+	scn.bloomLayer = new Layers();
+	scn.bloomLayer.set( BLOOM_SCENE );
+	scn.renderScene = new RenderPass( scn, getMesh(scn, 'cam') );
+	scn.bloomPass = new UnrealBloomPass( new Vector2( scn.canvas.width, scn.canvas.width ), 1.5, 0.4, 0.85 );
+	scn.bloomPass.threshold = 0.1;
+	scn.bloomPass.strength = 0.1;
+	scn.bloomPass.radius = 0.01;
+	scn.bloomComposer = new EffectComposer( scn.renderer );
+	scn.bloomComposer.renderToScreen = false;
+	scn.bloomComposer.addPass( scn.renderScene );
+	scn.bloomComposer.addPass( scn.bloomPass );
+	scn.mixPass = new ShaderPass(
+		new ShaderMaterial( {
+			uniforms: {
+				baseTexture: { value: null },
+				bloomTexture: { value: scn.bloomComposer.renderTarget2.texture }
+			},
+			vertexShader: document.getElementById( 'vertexshader' ).textContent,
+			fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
+			defines: {}
+		} ), 'baseTexture'
+	);
+	scn.mixPass.needsSwap = true;
+	scn.outputPass = new OutputPass();
+	scn.finalComposer = new EffectComposer( scn.renderer );
+	scn.finalComposer.addPass( scn.renderScene );
+	scn.finalComposer.addPass( scn.mixPass );
+	scn.finalComposer.addPass( scn.outputPass );
+}
+
+function setLights(){
+	let sunLight = new PointLight( 0xffffff, 100000);
+	sunLight.name = 'sunLight';
+	sunLight.power = 500000;
+	sunLight.castShadow = true;
+	sunLight.shadow.mapSize.width = 512; // default
+	sunLight.shadow.mapSize.height = 512; // default
+	sunLight.shadow.camera.near = 0.5; // default
+	sunLight.shadow.camera.far = 5000; // default				
+	sunLight.position.set( 0, 0, 0 );
+	sunLight.needsUpdate = true;
+	return sunLight;
+}
+function setInfoCtnr(){
+	let infoCtnr = new Group();
+	infoCtnr.name = 'infoCtnr';
+	infoCtnr.h2 = { style: scn.fonts.rubik['Rubik-Bold'], size: 0.5 };
+	infoCtnr.p = { style: scn.fonts.rubik['Rubik-Regular'], size: 0.24 };
+	infoCtnr.position.z = -scn.frontPlaneDistance;
+	infoCtnr.renderOrder = 4;
+	return infoCtnr;
+}
+
+function setHud( cam ){
+	let hud = new Group();
+	hud.name ='hud';
+	hud.bb = {};
+
+	hud.renderOrder = 4;
+	hud.toggle = false;
+	hud.pressed = [];
+	
+	hud.objs = loadHudObjs();
+	for( let ctrls of Object.values(hud.objs) ){
+		ctrls.builder(hud, ctrls);
+	}
+	
+	delete hud.objs;
+	return hud;
+}
+function setStick(hud, ctrls){
+	let buffer = new CircleGeometry(ctrls.size, ctrls.subDivs);
+	buffer.computeBoundingSphere();
+	const geometry = new InstancedBufferGeometry().copy( buffer );
+	geometry.instanceCount = ctrls.meshes.length;
+	//let translations = new Float32Array([-0.2, 0, 0, 0.5, 0, 0]);
+	//let scales = new Float32Array([0.2, 0.2, 0.2, 0.4, 0.4, 0.4]);
+	//geometry.setAttribute( 'translation', new InstancedBufferAttribute( translations, 3, 1 ) );
+    //geometry.setAttribute( 'scale', new InstancedBufferAttribute( scales, 3, 1 ) );
+	const material = new MeshMatcapMaterial( {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 } );
+	const mesh = new Mesh( geometry, material );
+
+	for(let i = 0; i < ctrls.meshes.length; i++){
+		geometry.addGroup( 0, Infinity, i );
+		let mat = new ctrls.meshes[i].mat(ctrls.meshes[i].spec);
+		let mesh = new Mesh(geometry, mat);
+		mesh.scale.normalize();
+		mesh.geometry.computeBoundingSphere();
+		mesh.geometry.computeBoundingBox();
+		mesh.bb = {};
+		mesh.bb.width = mesh.geometry.boundingSphere.radius*2;
+		mesh.bb.height = mesh.geometry.boundingSphere.radius*2;
+		mesh.name = ctrls.meshes[i].attr.name;
+		mesh.layout = ctrls.meshes[i].layout;
+		mesh.identifier = ctrls.meshes[i].attr.identifier;
+		mesh.action = ctrls.meshes[i].attr.action;
+		mesh.startV = ctrls.meshes[i].attr.startV;
+		mesh.weight = ctrls.meshes[i].attr.weight;
+		hud.add(mesh);
+		mat.dispose();
+	}
+	buffer.dispose();
+	return;
+}
+function loadHudObjs(){
+	return {
+		stick: {
+			builder: setStick, geometry: CircleGeometry, size:0.5, subDivs:64, meshes: 
+			[
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, layout: {x:-1, y:0, scale: 0.5}, attr: { name: 'stickT', identifier: null, action: {x:'translateX', y:'translateZ'}, startV: new Vector2(), weight: { x:(0.2), y:(0.3) } } },
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, layout: {x:1, y:0, scale: 0.5}, attr: { name: 'stickR', identifier: null, action: { x:'rotateY', y:'rotateX' }, startV: new Vector2(), weight: { x:(0.2), y:(0.3) } } }
+			]
+		}
+	}
+}
+
+function pointerdown( e ) {
+	e.preventDefault();
+	intersectClickEvent(e);
+}
+function touchstart( e ) {
+	e.preventDefault();
+	intersectClickEvent(e);
+}
+function intersectClickEvent(e, cam=getMesh(scn, 'cam')){
+	e.preventDefault();
+	if ( e.changedTouches ) {
+		if ( e.changedTouches.length > 1 ) { return }
+			e = e.changedTouches[0];
+	}
+	scn.pointer.x = ( e.clientX / scn.canvas.offsetWidth ) * 2 - 1;
+	scn.pointer.y = - ( e.clientY / scn.canvas.offsetHeight ) * 2 + 1;
+	if( scn.pointer.y > cam.hudPercent ){
+		scn.rCast.setFromCamera( scn.pointer, getMesh(scn, 'cam') );
+		scn.intersects = scn.rCast.intersectObjects( getMesh(scn, 'rayBodies').children, false );
+		if(!getMesh(scn, 'cam').lock && !getMesh(scn, 'cam').info){
+			if ( scn.intersects.length > 0 ) {
+				scn.currIntrsc = scn.intersects[0].object.name;
+				cam.lock = true;
+				lockTarget();
+			}
+		}
+		if ( scn.intersects.length == 0 ) {
+			getMesh(scn, 'cam').lock = false;
+			if( getMesh(scn, 'cam').info ){
+				 hideInfo();
+			}
+		}
+	}
+	if( scn.pointer.y <= cam.hudPercent ){
+		scn.rCast.setFromCamera( scn.pointer, getMesh(scn, 'cam') );
+		scn.intersects = scn.rCast.intersectObjects( getMesh(getMesh(scn, 'cam'), 'hud').children, false );
+		if ( scn.intersects.length > 0 ) {
+			console.log(scn.intersects[0].object.startV.x, scn.pointer.x )
+			getMesh(cam, 'hud').toggle = true;
+			getMesh(cam, 'hud').selected = scn.intersects[0].object;
+			getMesh(cam, 'hud').selected.identifier = e.identifier;
+			//getMesh(cam, 'hud').selected.startV.copy(scn.pointer);
+			getMesh(cam, 'hud').pressed.push(getMesh(cam, 'hud').selected);
+		}
+	}
+}
+function pointermove( e ){
+	e.preventDefault();
+	intersectMoveEvent(e);
+}
+function touchmove( e ) {
+	e.preventDefault();
+	intersectMoveEvent(e);
+}
+function intersectMoveEvent(e, cam=getMesh(scn, 'cam')){
+	e.preventDefault();
+	if ( e.changedTouches ) {
+		if ( e.changedTouches.length > 1 ) { return }
+		e = e.changedTouches[0];
+	}
+	scn.pointer.x = ( e.clientX / scn.canvas.offsetWidth ) * 2 - 1;
+	scn.pointer.y = - ( e.clientY / scn.canvas.offsetHeight ) * 2 + 1;
+
+	if( scn.pointer.y > cam.hudPercent ){
+		scn.rCast.setFromCamera( scn.pointer, getMesh(scn, 'cam') );
+		scn.intersects = scn.rCast.intersectObjects( getMesh(scn, 'rayBodies').children, false );
+		
+		if(!getMesh(scn, 'cam').lock && !getMesh(scn, 'cam').info){
+			/*
+			getMesh(scn, 'cam').rotateX( scn.pointer.y * Math.PI/180 );
+			getMesh(scn, 'cam').rotateY(scn.pointer.x * -Math.PI/180);
+			*/
+			if ( scn.intersects.length > 0 ) {
+				if(scn.currIntrsc == null){
+					//'new'			
+					scn.currIntrsc = scn.intersects[0].object.name;
+					animeItem(getMesh(getMesh(scn, 'rayBodies'), scn.currIntrsc), 'material', ['opacity'], [0.3], 0.5);
+				}
+				if(scn.currIntrsc != scn.intersects[0].object.name){
+					//'changed'
+					animeItem(getMesh(getMesh(scn, 'rayBodies'), scn.currIntrsc), 'material', ['opacity'], [0], 0.5);
+					scn.currIntrsc = scn.intersects[0].object.name;	
+					animeItem(getMesh(getMesh(scn, 'rayBodies'), scn.currIntrsc), 'material', ['opacity'], [0.3], 0.5);
+				}
+			}
+			if ( scn.intersects.length === 0 &&  scn.currIntrsc != null) {
+				//'none'
+				animeItem(getMesh(getMesh(scn, 'rayBodies'), scn.currIntrsc), 'material', ['opacity'], [0], 0.5);
+				scn.currIntrsc = null;
+			}
+		}
+	}
+	if( scn.pointer.y <= cam.hudPercent ){	
+		if(getMesh(cam, 'hud').toggle === true){
+			getMesh(scn, 'cam').velocity += (getMesh(scn, 'cam').speed - getMesh(scn, 'cam').velocity) * 0.3;
+			for(let i = 0; i<getMesh(cam, 'hud').pressed.length; i++){
+				let vX = clamp( -1, ((scn.pointer.x - getMesh(cam, 'hud').selected.startV.x)), 2 );
+				let vY = clamp( -1, (scn.pointer.y - getMesh(cam, 'hud').selected.startV.y), 1 );
+				getMesh(cam, 'hud').selected.position.x = vX;
+				getMesh(cam, 'hud').selected.position.y = vY;
+				getMesh(scn, 'cam')[getMesh(cam, 'hud').selected.action.x](vX);
+				getMesh(scn, 'cam')[getMesh(cam, 'hud').selected.action.y](vY);
+			}
+		}
+	}
+}
+function pointerup( e, cam=getMesh(scn, 'cam') ){
+	e.preventDefault();
+	if(getMesh(cam, 'hud').toggle === true){
+		getMesh(cam, 'hud').selected.position.x = scn.intersects[0].object.startV.x;
+		getMesh(cam, 'hud').selected.position.y = scn.intersects[0].object.startV.y;
+		getMesh(cam, 'hud').toggle = false;
+	}
+}
+function touchend( e ) {
+	e.preventDefault();
+	if(scn.hud.toggle === true){
+		scn.hud.selected.position.x = 0;
+		scn.hud.selected.position.y = 0;
+		scn.hud.toggle = false;
+	}
+}
+function keydown( e ) {
+	if(!getMesh(scn, 'cam').lock && !getMesh(scn, 'cam').info){
+		getMesh(scn, 'cam').velocity += (getMesh(scn, 'cam').speed - getMesh(scn, 'cam').velocity) * .3;
+		if (e.key === 'ArrowUp') {
+			getMesh(scn, 'cam').translateZ(-getMesh(scn, 'cam').velocity);
+		}
+		if (e.key === 'ArrowDown') {
+			getMesh(scn, 'cam').translateZ(getMesh(scn, 'cam').velocity);
+		}
+		if (e.key === 'ArrowRight') {
+			getMesh(scn, 'cam').translateX(getMesh(scn, 'cam').velocity);
+		}
+		if (e.key === 'ArrowLeft') {
+			getMesh(scn, 'cam').translateX(-getMesh(scn, 'cam').velocity);
+		}
+	}
+}
+function keyup( e ) {
+	getMesh(scn, 'cam').velocity = 0;
+}
+function wheel(e){
+	if(!getMesh(scn, 'cam').lock){
+		getMesh(scn, 'cam').velocity += (getMesh(scn, 'cam').speed - getMesh(scn, 'cam').velocity) * .002;
+		getMesh(scn, 'cam').translateZ(getMesh(scn, 'cam').velocity * e.deltaY );
+	}
+	return;
+}
+
+function lockTarget( cam=getMesh(scn, 'cam') ){
+	cam.frameCue = 0;
+	scn.selected = scn.currIntrsc;
+	scn.targetOffset = ( getMesh(getMesh(scn, 'rayBodies'), scn.currIntrsc).geometry.boundingSphere.radius * 3) + scn.frontPlaneDistance;
+}
+function cameraLock( cam=getMesh(scn, 'cam') ){
+	cam.initP = cam.position;
+	scn.targetP = getMesh(getMesh(scn, 'rayBodies'), scn.currIntrsc).getWorldPosition( scn.targetP );
+	cam.distance = cam.initP.distanceTo(scn.targetP);
+	cam.speed = cam.distance/10;
+	if( cam.distance > scn.targetOffset ){
+		cam.velocity += (cam.speed - cam.velocity) * .3;
+		cam.translateZ(-cam.velocity);
+		
+		cam.rMatrix.lookAt( cam.position, scn.targetP, scn.worldUp );
+		scn.targetQ.setFromRotationMatrix( cam.rMatrix );
+		if ( ! cam.quaternion.equals( scn.targetQ ) ) {
+		const step = (cam.quaternion.angleTo(scn.targetQ) ) * (cam.frameCue/30);
+			cam.quaternion.rotateTowards( scn.targetQ, step );
+		}
+		cam.frameCue++;
+	}
+	if( cam.distance <= scn.targetOffset ){
+		animeItem(getMesh(getMesh(scn, 'rayBodies'), scn.currIntrsc), 'material', ['opacity'], [0], 0.5);
+		cam.lookAt(scn.targetP);
+		cam.lock = false;
+		cam.info = true;
+		displayInfo();
+	}
+}
+function displayInfo( cam=getMesh(scn, 'cam') ){
+	cam.frameCue = 0;
+	let textFieldPY = 0;
+	for(let i=0; i< scn.objsInfo[scn.currIntrsc].length; i++){
+		let textField = scn.objsInfo[scn.currIntrsc][i];
+		let textMesh = generateText(textField.text, getMesh(cam, 'infoCtnr')[textField.tag].style, getMesh(cam, 'infoCtnr')[textField.tag].size);
+		getMesh(cam, 'infoCtnr').add( textMesh );
+		textMesh.position.y = textFieldPY;
+		textFieldPY -= textMesh.bb.h;
+	}
+	for(let i=0; i< getMesh(cam, 'infoCtnr').children.length; i++){
+		animeItem(getMesh(cam, 'infoCtnr').children[i], 'material', ['opacity'], [1], 1);
+	}
+}
+function cameraInfo( cam=getMesh(scn, 'cam') ){
+	scn.targetP = getMesh(getMesh(scn, 'rayBodies'), scn.currIntrsc).getWorldPosition( scn.targetP );
+	cam.lookAt(scn.targetP);
+}
+function hideInfo( cam=getMesh(scn, 'cam') ){
+	for(let i=0; i< getMesh(cam, 'infoCtnr').children.length; i++){
+		animeItem(getMesh(cam, 'infoCtnr').children[i], 'material', ['opacity'], [0], 1, 0, function(){
+			if(i == getMesh(cam, 'infoCtnr').children.length-1){
+				clearInfoCtnr();
+			}
+		});
+	}
+}
+function clearInfoCtnr( cam=getMesh(scn, 'cam') ) {
+    for(let i=0; i< getMesh(cam, 'infoCtnr').children.length; i++){
+		getMesh(cam, 'infoCtnr').children[i].geometry.dispose();
+		getMesh(cam, 'infoCtnr').children[i].material.dispose();
+	}
+	getMesh(cam, 'infoCtnr').clear();
+	cam.info = false;
+	scn.selected = null;
+	scn.currIntrsc = null;
+}
+
 function filesLoad(){
 	return {
 		textures: {
-			loaderClass: TextureLoader, absPath : "/media/planetarium/", fileType: 'webp',
+			loaderClass: TextureLoader, absPath : "/media/planetarium/", fileType: 'avif',
 			files: {
 				galaxy: ['galaxy-map' ],
 				sun: [ 'sun-map', 'sun-bumpMap' ],
 				mercury: [ 'mercury-map', 'mercury-bumpMap' ],
 				venus: [ 'venus-map', 'venus-bumpMap'],
-				
-				
 				earth : [ 'earthDay-map', 'earthDay-bumpMap', 'earthDay-metalnessMap', 'earthNight-map', 'earthClouds-map' ],
 				
 
@@ -865,63 +949,6 @@ function filesLoad(){
 		}
 	}
 }
-
-//[ geometry[{material{txt,spec}}] ] 
-function loadMeshesSpecs(){
-	return {
-		earth : [
-		[ { mat: MeshStandardMaterial, txt:{map: 'earthDay-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthDay-metalnessMap'}, spec: {roughness: 0, metalness: 0, anisotropy: 0.1,  bumpScale: 0.008, transparent: true, depthWrite : false, 
-		blending: CustomBlending, 
-		blendEquation: MaxEquation,
-		}} , { mat: MeshStandardMaterial, txt:{map: 'earthNight-map', lightMap: 
-		'earthNight-map', bumpMap: 'earthDay-bumpMap'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 12, bumpScale: 0.008
-		}} ],
-
-		[{ mat: MeshStandardMaterial, txt:{map: 'earthClouds-map', alphaMap: 'earthClouds-map', displacementMap: 'earthClouds-map'}, spec: {displacementScale: 0.04, roughness: 0, metalness: 0, transparent: true, depthWrite : false, opacity: 0.6 }} ]
-		],
-		
-		galaxy: [[ 
-		{ mat: MeshBasicMaterial, txt:{map:'galaxy-map'}, spec: {specular: 0.1}}
-		]],
-		
-		sun: [[ { mat: MeshStandardMaterial, txt:{map:'sun-map', lightMap: 'sun-map', emissiveMap: 'sun-map', bumpMap: 'sun-bumpMap'}, spec: {roughness: 0, metalness: 0, lightMapIntensity: 8, emissive: new Color(0.7, 0.4, 0), emissiveIntensity: 2, bumpScale: 1} } ]],
-		
-		mercury: [[ { mat: MeshStandardMaterial, txt:{map:'mercury-map', bumpMap: 'mercury-bumpMap'}, spec: {roughness: 0, metalness: 0, bumpScale: 0.02} } ]],
-		
-		venus: [[ { mat: MeshStandardMaterial, txt:{map:'venus-map', bumpMap: 'venus-bumpMap'}, spec: {roughness: 0, metalness: 0, bumpScale: 0.02} } ]],
-		
-		mars: [[ { mat: MeshStandardMaterial, txt:{map:'mars-map', bumpMap: 'mars-bumpMap'}, spec: {roughness: 1, metalness: 0, bumpScale: 0.02} } ]],
-		
-		jupiter: [[ { mat: MeshStandardMaterial, txt:{map:'jupiter-map'}, spec: {roughness: 0, metalness: 0} } ]],
-		
-		saturn: [[ { mat: MeshStandardMaterial, txt:{map:'saturn-map'}, spec: {roughness: 0, metalness: 0} } ]],
-		
-		saturnRing: [[ { mat: MeshStandardMaterial, txt:{map:'saturnRing-map', lightMap: 'saturnRing-map',alphaMap: 'saturnRing-alphaMap'}, spec: {roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, depthWrite : false, blending: AdditiveBlending} } ]],
-		
-		uranus: [[ { mat: MeshStandardMaterial, txt:{map:'uranus-map'}, spec: {roughness: 0, metalness: 0} } ]],
-		
-		uranusRing: [[ { mat: MeshStandardMaterial, txt:{map:'uranusRing-map', lightMap: 'uranusRing-map',alphaMap: 'uranusRing-alphaMap'}, spec: {roughness: 0.4, metalness: 0.4, lightMapIntensity: 3, transparent: true, depthWrite : false, blending: AdditiveBlending} } ]],
-		
-		neptune: [[ { mat: MeshStandardMaterial, txt:{map:'neptune-map'}, spec: {roughness: 0, metalness: 0} } ]],
-		
-		pluto: [[ { mat: MeshStandardMaterial, txt:{map:'pluto-map', bumpMap: 'pluto-bumpMap'}, spec: {roughness: 0, metalness: 0, bumpScale: 0.02} } ]]
-	}
-}
-
-function loadOrbits(){
-	return {
-	sun: {translation: 29.78, rotation: 0.0006875, axis: 0, color: 0xd84b10, subDivs: 20},
-	mercury: {translation: 47.87, rotation: 0.0083, axis: Math.PI/180 * -0.1, color: 0x5e2902, subDivs: 40},
-	venus: {translation: 35.02, rotation: 0.00652, axis: Math.PI/180 * -177, color: 0x803710, subDivs: 60},
-	earth: {translation: 29.78, rotation: 0.01574, axis: Math.PI/180 * 23, color: 0x14425b, subDivs: 100},
-	mars: {translation: 24.077, rotation: 0.00866, axis: Math.PI/180 * -25, color: 0x81524b, subDivs: 140},
-	jupiter: {translation:13.07, rotation: 0.0045583, axis: Math.PI/180 * -3, color: 0xae6137, subDivs: 180},
-	saturn: {translation: 9.69, rotation: 0.0036840, axis: Math.PI/180 * -27, color: 0xd9b383, subDivs: 220},
-	uranus: {translation: 6.81, rotation: 0.0014794, axis: Math.PI/180 * -98, color: 0x9fb6c3, subDivs: 260},
-	neptune: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x5a69b6, subDivs: 320},
-	pluto: {translation: 5.43, rotation: 0.009719, axis: Math.PI/180 * -30, color: 0x535c6b, subDivs: 360}
-	}
-}
 function loadTexts(){
 	let textsInfo = document.getElementById('celestiaBodiesInfo');
 	let obj = {};
@@ -939,44 +966,51 @@ function loadTexts(){
 	}
 	return obj;
 }
-function calcViewSize(depth, target=(scn.cam.view)){
-	return scn.cam.getViewSize(depth, target );
+
+function animate() {
+	if( scn.now - scn.then >= scn.fps){
+		scn.then = performance.now();
+		render();
+	}
+	scn.now = performance.now();
+	requestAnimationFrame(animate);
 }
-function easeLinear(t, b, c, d) {
-	return c * t / d + b;
-}	
-function easeInOutQuad(t, b, c, d) {
-	if ((t /= d / 2) < 1) return c / 2 * t * t + b;
-	return -c / 2 * ((--t) * (t - 2) - 1) + b;
+function render(){
+	scn.currFrame++;
+	for( let key of Object.entries(scn.orbits) ){
+		getMesh(scn, key[0]).position.copy(key[1].curve.getPointAt( (scn.currFrame/key[1].subDivs * key[1].translation / 10) % key[1].subDivs/key[1].subDivs ) );
+		getMesh(scn, key[0]).rotation.y += key[1].rotation;
+		
+		getMesh(getMesh(scn, 'rayBodies'), key[0]).position.copy(key[1].curve.getPointAt( (scn.currFrame/key[1].subDivs * key[1].translation / 10) % key[1].subDivs/key[1].subDivs ) );
+	}
+	getMesh(scn, 'earth').children[0].rotation.y += 0.003;
+	if(getMesh(scn, 'cam').lock){ cameraLock(); }
+	if(getMesh(scn, 'cam').info){ cameraInfo(); }
+	for(let i = 0; i < scn.renderGroup.length; i++){
+		// [ startFrame, duration(seconds), item, property, param, ease, startV, deltaV, endV, endAction ]
+		scn.motionCount = scn.currFrame - scn.renderGroup[i][0];
+		if(scn.motionCount >= scn.renderGroup[i][1]){
+			scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = scn.renderGroup[i][8];
+			if(scn.renderGroup[i][9]){
+				scn.renderGroup[i][9]();
+			}
+			scn.renderGroup.splice(i, 1);
+			continue;
+		}
+		scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = Math.trunc(scn.renderGroup[i][5](scn.motionCount, scn.renderGroup[i][6], scn.renderGroup[i][7], scn.renderGroup[i][1])*100 )/100;			
+	}
+	getMesh(scn, 'cam').updateProjectionMatrix();
+	scn.renderer.render( scn, getMesh(scn, 'cam') );
+	//scn.bloomComposer.render();
+	//scn.finalComposer.render();
+	
+
 }
-function clamp(val, min, max) {
-    return Math.trunc( (val > max ? max : val < min ? min : val) * 100) / 100;
-}
-function generateText(textContent, fontStyle, fontSize){
-	let geometry = new TextGeometry( textContent, {
-		font: fontStyle,
-		size: fontSize,
-		height: 0.0,
-		depth: 0.0,
-		curveSegments: 1.4,
-		bevelEnabled: false,
-		bevelThickness: 0,
-		bevelSize: 0,
-	} );
-	geometry.clearGroups();
-	geometry.computeBoundingBox();
-	let textMat = new MeshMatcapMaterial( { color: 0xffffff, transparent: true, fog: false } );
-	let textMesh = new Mesh( geometry, textMat );
-	textMesh.material.opacity = 0;
-	let width = Math.trunc( Math.abs(textMesh.geometry.boundingBox.min.x - textMesh.geometry.boundingBox.max.x) *1000)/1000 ;
-	let height = Math.trunc( Math.abs(textMesh.geometry.boundingBox.min.y - textMesh.geometry.boundingBox.max.y) *1000)/1000 ;
-	textMesh.geometry.translate(-width/2, -height, 0);
-	textMesh.bb = {w:width, h:height};
-	geometry.dispose();
-	textMat.dispose();
-	textMesh.scale.normalize();
-	return textMesh;	
-}
+
+
+
+
+
 init();
 </script>
 </div>
