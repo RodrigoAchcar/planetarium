@@ -82,7 +82,7 @@
         <p>Rotação: 0.67 dia/terra</p>
         <p>Translação: 60190 dias/terra</p>
     </div>
-	 <div id="pluto">
+	<div id="pluto">
         <h2>Plutão</h2>
         <p>Distância Média do Sol: 4504000000 km</p>
         <p>Diâmetro: 49532 km</p>
@@ -90,7 +90,6 @@
         <p>Translação: 60190 dias/terra</p>
     </div>
 </div>
-
 <script type="x-shader/x-vertex" id="vertexshader">
 	varying vec2 vUv;
 	void main() {
@@ -106,16 +105,13 @@
 		gl_FragColor = ( texture2D( baseTexture, vUv ) + vec4( 1.0 ) * texture2D( bloomTexture, vUv ) );
 	}
 </script>
-
-
-
 <script type="importmap">
-    {
-		"imports": {
-			"three": "/static/js/webgl/build/three.module.js",
-			"three/addons/": "/static/js/webgl/jsm/"			
-		}
+{
+	"imports": {
+		"three": "/static/js/webgl/build/three.module.js",
+		"three/addons/": "/static/js/webgl/jsm/"			
 	}
+}
 </script>
 <script type="module">
 import { Cache, Scene, WebGLRenderer, ACESFilmicToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector2, Vector3, Matrix4, Quaternion, Group, Raycaster, PointLight, Color, SRGBColorSpace, CustomBlending, AdditiveBlending, MaxEquation, CatmullRomCurve3, InstancedBufferGeometry, InstancedBufferAttribute, Float32BufferAttribute, CircleGeometry, PlaneGeometry, Mesh, MeshStandardMaterial, MeshBasicMaterial, MeshMatcapMaterial, LoadingManager, TextureLoader, Layers, ShaderMaterial, RawShaderMaterial, DoubleSide, Vector4, BufferAttribute } from 'three';
@@ -362,7 +358,7 @@ function setMeshes(){
 					linewidth: 4,
 					dashed: true,
 					dashScale : 0,
-					transparent: true, opacity: 0.05, depthWrite : false
+					transparent: true, opacity: 0.15, depthWrite : false
 				} );
 				let line = new Line2( geometry, matLine );
 				line.computeLineDistances();
@@ -400,19 +396,21 @@ function setMeshes(){
 	run();
 }
 function run(){
-	scn.renderer.domElement.addEventListener( 'pointermove', pointermove);
-	scn.renderer.domElement.addEventListener( 'pointerdown', pointerdown );
+
+	document.addEventListener( 'pointermove', pointermove);
+	document.addEventListener( 'pointerdown', pointerdown );
 	document.addEventListener( 'pointerup', pointerup );
 
-/*	
+	/*
 	scn.renderer.domElement.addEventListener( 'touchstart', touchstart);
 	scn.renderer.domElement.addEventListener( 'touchmove', touchmove);
 	window.addEventListener( 'touchend', touchend);
-*/	
+	*/
 
 	document.addEventListener( 'wheel', wheel );
 	document.addEventListener( 'keyup', keyup );
 	document.addEventListener( 'keydown', keydown );
+	
 	window.addEventListener( 'resize', resize );
 
 	resize();
@@ -427,7 +425,7 @@ function resize() {
 	getMesh('cam').frontPlaneRatio = getMesh('cam').view.x / getMesh('cam').view.y;
 	
 	getMesh('hud', ['cam']).bb.width = getMesh('cam').view.x;
-	getMesh('hud', ['cam']).bb.height = (getMesh('cam').view.y/getMesh('cam').view.x);
+	getMesh('hud', ['cam']).bb.height = getMesh('cam').frontPlaneRatio*(getMesh('cam').view.y/getMesh('cam').view.x);
 	getMesh('hud', ['cam']).bb.y = (-getMesh('cam').view.y/2) + getMesh('hud', ['cam']).bb.height/2;
 	
 	getMesh('cam').hudPercent = (getMesh('hud', ['cam']).bb.height * 100)/getMesh('cam').view.y;
@@ -438,7 +436,7 @@ function resize() {
 		let btnName = getMesh('btns', ['cam', 'hud']).btnNames[i];
 		let btn = getMesh(btnName, ['cam', 'hud', 'btns']);
 		let scale = getMesh('hud', ['cam']).bb.height/2 * btn.layout.scale;
-		let x = (((btn.bb.width/2)* btn.layout.x)+((btn.bb.width/2) * btn.layout.x)) * getMesh('cam').frontPlaneRatio;
+		let x = ((btn.bb.width/2)* btn.layout.x) * getMesh('cam').frontPlaneRatio;
 		let y = btn.layout.y;
 		getMesh(btnName, ['cam', 'hud', 'btns']).scale.set(scale, scale, 1);
 		getMesh(btnName, ['cam', 'hud', 'btns']).position.set(x, y, 0);		
@@ -452,7 +450,6 @@ function resize() {
 	getMesh('infoCtnr', ['cam']).position.y = -getMesh('hud', ['cam']).bb.y;
 	
 }
-
 //[ geometry[{material{txt,spec}}] ] 
 function loadMeshesSpecs(){
 	return {
@@ -719,8 +716,8 @@ function loadHudObjs(){
 		stick: {
 			builder: setStick, geometry: CircleGeometry, size:1, subDivs:32, meshes: 
 			[
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', identifier: null, action: {x:'translateX', y:'translateZ'}, startP: new Vector2(), weight: { x:(0.2), y:(0.3) }, layout: {x:-1, y:0, scale: 0.5} } },
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', identifier: null, action: { x:'rotateY', y:'rotateX' }, startP: new Vector2(), weight: { x:(0.2), y:(0.3) }, layout: {x:1, y:0, scale: 0.5}  } }
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', identifier: null, action: {x:'translateX', y:'translateZ'}, startP: new Vector2(), weight: { x:(-0.2), y:(-0.3) }, layout: {x:-1, y:0, scale: 0.4} } },
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', identifier: null, action: { x:'rotateY', y:'rotateX' }, startP: new Vector2(), weight: { x:(-0.002), y:(0.003) }, layout: {x:1, y:0, scale: 0.4}  } }
 			]
 		}
 	}
@@ -774,7 +771,6 @@ function intersectClickEvent(e){
 		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
 		scn.intersects = scn.rCast.intersectObjects( getMesh('btns', ['cam', 'hud']).children, true );
 		if ( scn.intersects.length > 0 ) {
-			console.log('sadasd')
 			getMesh('hud', ['cam']).toggle = true;
 			scn.btnPressed.push(scn.intersects[0].object.name);
 			getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).startP.set(scn.pointer.x, scn.pointer.y);
@@ -784,11 +780,9 @@ function intersectClickEvent(e){
 }
 function intersectMoveEvent(e){
 	updatePointer( e );
-
 	if( scn.pointer.y > getMesh('cam').hudAreaH ){
 		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
 		scn.intersects = scn.rCast.intersectObjects( getMesh( 'rayBodies').children, false );
-		
 		if(!getMesh('cam').lock && !getMesh('cam').info){
 			/*
 			getMesh('cam').rotateX( scn.pointer.y * Math.PI/180 );
@@ -814,19 +808,24 @@ function intersectMoveEvent(e){
 			}
 		}
 	}
-	if( scn.pointer.y <= getMesh('cam').hudAreaH ){
+	if( scn.pointer.y <= getMesh('cam').hudAreaH/2 ){
 		if(getMesh('hud', ['cam']).toggle === true){
-			getMesh('cam').velocity += (getMesh('cam').speed - getMesh('cam').velocity) * 0.3;
+			//getMesh('cam').velocity += (getMesh('cam').speed - getMesh('cam').velocity) * 0.3;
 			for(let i = 0; i< scn.btnPressed.length; i++){
-				let bb = 1;
 				let deltaX = (scn.pointer.x - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.x);
-				let deltaY = (scn.pointer.y - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.y)*4;
-
-				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.x = clamp(-bb, deltaX, bb);
-				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.y = clamp(-bb, deltaY, bb);
-
-				getMesh('cam')[ getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns'])['action']['x'] ](deltaX);
-				getMesh('cam')[ getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns'])['action']['y'] ](deltaY);
+				let pX = (getMesh('cam').frontPlaneRatio*deltaX)*scn.frontPlaneDistance;
+				let deltaY = (scn.pointer.y - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.y);
+				let pY = (getMesh('cam').frontPlaneRatio*deltaY)*scn.frontPlaneDistance;
+				//console.log(pX, pY)
+				let limit = Math.sqrt( Math.pow(pX, 2) + Math.pow(pY, 2) );
+				if( limit >= 1 ){
+					pX = (pX/limit);
+					pY = (pY/limit);
+				}
+				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.x = pX;
+				getMesh('cam')[ getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns'])['action']['x'] ](pX * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).weight.x );
+				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.y = pY;				
+				getMesh('cam')[ getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns'])['action']['y'] ](pY * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).weight.y);
 			}
 		}
 	}
@@ -993,7 +992,6 @@ function loadTexts(){
 	return obj;
 }
 
-
 function render(){
 	for( let key of Object.entries(scn.orbits) ){
 		getMesh(key[0]).position.copy(key[1].curve.getPointAt( (scn.currFrame/key[1].subDivs * key[1].translation / 10) % key[1].subDivs/key[1].subDivs ) );
@@ -1032,9 +1030,6 @@ function animate() {
 	}
 	requestAnimationFrame(animate);
 }
-
-
-
 
 init();
 </script>
