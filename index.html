@@ -218,20 +218,18 @@ function setCamera(){
 	let camera = new PerspectiveCamera( 35, scn.canvas.offsetWidth/ scn.canvas.offsetHeight, 0.01, 100000 );
 	camera.name = 'cam';
 	camera.scale.normalize();
-	camera.view = new Vector2( 1, 1 );
-	
+	camera.view = new Vector2();
 	camera.frontPlaneRatio = camera.view.x / camera.view.y;
 	camera.frameCue = 0;
 	camera.lock = false;
 	camera.info = false;
 	camera.initP = new Vector3();
 	camera.distance = null;
-	camera.worldDirection = new Vector3();
-	camera.getWorldDirection(camera.worldDirection); 
-	camera.direction = new Vector3();
 	camera.rMatrix = new Matrix4();
 	camera.velocity = 0.0;
-	camera.speed = 0.8;
+	camera.speed = 0.9;
+	camera.moves = {x: 0, z: 0};
+	camera.rotates = {x: 0, y: 0};
 	
 	camera.attach(setHud( camera ));
 	camera.attach(setInfoCtnr());
@@ -396,23 +394,18 @@ function setMeshes(){
 	run();
 }
 function run(){
-
 	document.addEventListener( 'pointermove', pointermove);
 	document.addEventListener( 'pointerdown', pointerdown );
 	document.addEventListener( 'pointerup', pointerup );
-
 	/*
 	scn.renderer.domElement.addEventListener( 'touchstart', touchstart);
 	scn.renderer.domElement.addEventListener( 'touchmove', touchmove);
 	window.addEventListener( 'touchend', touchend);
 	*/
-
 	document.addEventListener( 'wheel', wheel );
 	document.addEventListener( 'keyup', keyup );
 	document.addEventListener( 'keydown', keydown );
-	
 	window.addEventListener( 'resize', resize );
-
 	resize();
 	animate();
 }
@@ -443,13 +436,268 @@ function resize() {
 	}
 	getMesh('hud', ['cam']).position.y = getMesh('hud', ['cam']).bb.y;
 	getMesh('hud', ['cam']).position.z = -scn.frontPlaneDistance;
-	
 	getMesh('artBorders', ['cam', 'hud']).scale.set( getMesh('hud', ['cam']).bb.width, getMesh('hud', ['cam']).bb.height, 1 );
-
 	getMesh('infoCtnr', ['cam']).scale.set( getMesh('cam').view.x, getMesh('cam').view.x, 1 );
 	getMesh('infoCtnr', ['cam']).position.y = -getMesh('hud', ['cam']).bb.y;
-	
+	return;
 }
+
+function pointerdown( e ) {
+	e.preventDefault();
+	intersectClickEvent(e);
+}
+function touchstart( e ) {
+	e.preventDefault();
+	intersectClickEvent(e);
+}
+function pointermove( e ){
+	e.preventDefault();
+	intersectMoveEvent(e);
+}
+function touchmove( e ) {
+	e.preventDefault();
+	intersectMoveEvent(e);
+}
+function updatePointer( e ){
+	e.preventDefault();
+	if ( e.changedTouches ) {
+		if ( e.changedTouches.length > 1 ) { return }
+			e = e.changedTouches[0];
+	}
+	scn.pointer.x = ( e.clientX / scn.canvas.offsetWidth ) * 2 - 1;
+	scn.pointer.y = - ( e.clientY / scn.canvas.offsetHeight ) * 2 + 1;
+}
+function intersectClickEvent(e){
+	updatePointer( e );
+	if( scn.pointer.y > getMesh('cam').hudAreaH ){
+		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
+		scn.intersects = scn.rCast.intersectObjects( getMesh( 'rayBodies').children, false );
+		if(!getMesh('cam').lock && !getMesh('cam').info){
+			if ( scn.intersects.length > 0 ) {
+				scn.currIntrsc = scn.intersects[0].object.name;
+				getMesh('cam').lock = true;
+				lockTarget();
+			}
+		}
+		if ( scn.intersects.length == 0 ) {
+			getMesh('cam').lock = false;
+			if( getMesh('cam').info ){
+				 hideInfo();
+			}
+		}
+	}
+	if( scn.pointer.y <= getMesh('cam').hudAreaH ){
+		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
+		scn.intersects = scn.rCast.intersectObjects( getMesh('btns', ['cam', 'hud']).children, true );
+		if ( scn.intersects.length > 0 ) {
+			getMesh('hud', ['cam']).toggle = true;
+			scn.btnPressed.push(scn.intersects[0].object.name);
+			getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).startP.set(scn.pointer.x, scn.pointer.y);
+			getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).identifier = e.identifier;
+		}
+	}
+}
+function intersectMoveEvent(e){
+	updatePointer( e );
+	if( scn.pointer.y > getMesh('cam').hudAreaH ){
+		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
+		scn.intersects = scn.rCast.intersectObjects( getMesh( 'rayBodies').children, false );
+		if(!getMesh('cam').lock && !getMesh('cam').info){
+			/*
+			getMesh('cam').rotateX( scn.pointer.y * Math.PI/180 );
+			getMesh('cam').rotateY(scn.pointer.x * -Math.PI/180);
+			*/
+			if ( scn.intersects.length > 0 ) {
+				if(scn.currIntrsc == null){
+					//'new'			
+					scn.currIntrsc = scn.intersects[0].object.name;
+					animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0.3], 0.5);
+				}
+				if(scn.currIntrsc != scn.intersects[0].object.name){
+					//'changed'
+					animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0], 0.5);
+					scn.currIntrsc = scn.intersects[0].object.name;	
+					animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0.3], 0.5);
+				}
+			}
+			if ( scn.intersects.length === 0 &&  scn.currIntrsc != null) {
+				//'none'
+				animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0], 0.5);
+				scn.currIntrsc = null;
+			}
+		}
+	}
+	if( scn.pointer.y <= getMesh('cam').hudAreaH/2 ){
+		if(getMesh('hud', ['cam']).toggle === true){
+			for(let i = 0; i< scn.btnPressed.length; i++){
+				let deltaX = (scn.pointer.x - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.x);
+				let pX = (getMesh('cam').frontPlaneRatio*deltaX)*scn.frontPlaneDistance;
+				let deltaY = (scn.pointer.y - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.y);
+				let pY = (getMesh('cam').frontPlaneRatio*deltaY)*scn.frontPlaneDistance;
+				//console.log(pX, pY)
+				let limit = Math.sqrt( Math.pow(pX, 2) + Math.pow(pY, 2) );
+				if( limit >= 1 ){
+					pX = (pX/limit);
+					pY = (pY/limit);
+				}
+				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.x = pX;
+				getMesh('cam')[getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).action][getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).x] += (pX * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).weight.x);
+				
+				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.y = pY;
+				getMesh('cam')[getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).action][getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).y] += (pY * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).weight.y);
+			}
+		}
+	}
+}
+function pointerup( e ){
+	e.preventDefault();
+	if(getMesh('hud', ['cam']).toggle === true){
+		getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).position.x = 0;
+		animeItem(getMesh('cam'), getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).action, [getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).x], [0], 0.5);
+		getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).position.y = 0;
+		animeItem(getMesh('cam'), getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).action, [getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).y], [0], 0.5);
+		scn.btnPressed.pop();
+		getMesh('hud', ['cam']).toggle = false;
+	}
+}
+function touchend( e ) {
+}
+function keydown( e ) {
+	e.preventDefault();
+	if(!getMesh('cam').lock && !getMesh('cam').info){
+		if (e.key === 'ArrowUp') {
+			getMesh('cam').moves.z += -0.1;
+		}
+		if (e.key === 'ArrowDown') {
+			getMesh('cam').moves.z += 0.1;
+		}
+		if (e.key === 'ArrowRight') {
+			getMesh('cam').moves.x += 0.1;
+		}
+		if (e.key === 'ArrowLeft') {
+			getMesh('cam').moves.x += -0.1;
+		}
+	}
+}
+function move(){
+	getMesh('cam').velocity += (getMesh('cam').speed - getMesh('cam').velocity) ;
+	if(getMesh('cam').velocity >= getMesh('cam').speed){
+		getMesh('cam').velocity = getMesh('cam').speed;
+	}
+	if(getMesh('cam').velocity <= 0){
+		getMesh('cam').velocity = 0;
+	}
+	getMesh('cam').translateZ(getMesh('cam').velocity * getMesh('cam').moves.z);
+	getMesh('cam').translateX(getMesh('cam').velocity * getMesh('cam').moves.x);
+}
+function rotate(){
+	getMesh('cam').velocity += (getMesh('cam').speed - getMesh('cam').velocity);
+	if(getMesh('cam').rotation.x <= -0.3){
+		getMesh('cam').rotation.x = -0.3;
+	}
+	if(getMesh('cam').rotation.x >= 0.3){
+		getMesh('cam').rotation.x = 0.3;
+	}
+	getMesh('cam').rotateX(getMesh('cam').velocity * getMesh('cam').rotates.y);
+	getMesh('cam').rotateY(getMesh('cam').velocity * getMesh('cam').rotates.x);
+	getMesh('cam').rotation.z = 0;
+}
+function keyup( e ) {
+	e.preventDefault();
+	if(!getMesh('cam').lock && !getMesh('cam').info){
+		if (e.key === 'ArrowUp') {
+			//getMesh('cam').moves.z = 0;
+			animeItem(getMesh('cam'), 'moves', ['z'], [0], 0.5);
+		}
+		if (e.key === 'ArrowDown') {
+			animeItem(getMesh('cam'), 'moves', ['z'], [0], 0.5);
+		}
+		if (e.key === 'ArrowRight') {
+			animeItem(getMesh('cam'), 'moves', ['x'], [0], 0.5);
+		}
+		if (e.key === 'ArrowLeft') {
+			animeItem(getMesh('cam'), 'moves', ['x'], [0], 0.5);
+		}
+	}
+}
+function wheel(e){
+	if(!getMesh('cam').lock && !getMesh('cam').info){
+		let v = e.deltaY/( getMesh('cam').view.x/getMesh('cam').frontPlaneRatio )/8;
+		animeItem(getMesh('cam'), 'moves', ['z'], [v], 0.2, 0, function(){
+			animeItem(getMesh('cam'), 'moves', ['z'], [0], 0.2);
+		});
+	}
+}
+
+function lockTarget(){
+	getMesh('cam').frameCue = 0;
+	scn.selected = scn.currIntrsc;
+	scn.targetOffset = ( getMesh(scn.currIntrsc, ['rayBodies']).geometry.boundingSphere.radius * 3) + scn.frontPlaneDistance;
+}
+function cameraLock( cam=getMesh('cam') ){
+	cam.initP = cam.position;
+	scn.targetP = getMesh(scn.currIntrsc, ['rayBodies']).getWorldPosition( scn.targetP );
+	cam.distance = cam.initP.distanceTo(scn.targetP);
+	cam.speed = cam.distance/10;
+	if( cam.distance > scn.targetOffset ){
+		cam.velocity += (cam.speed - cam.velocity) * .3;
+		cam.translateZ(-cam.velocity);
+		
+		cam.rMatrix.lookAt( cam.position, scn.targetP, scn.worldUp );
+		scn.targetQ.setFromRotationMatrix( cam.rMatrix );
+		if ( ! cam.quaternion.equals( scn.targetQ ) ) {
+		const step = (cam.quaternion.angleTo(scn.targetQ) ) * (cam.frameCue/30);
+			cam.quaternion.rotateTowards( scn.targetQ, step );
+		}
+		cam.frameCue++;
+	}
+	if( cam.distance <= scn.targetOffset ){
+		animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0], 0.5);
+		cam.lookAt(scn.targetP);
+		cam.lock = false;
+		cam.info = true;
+		displayInfo();
+	}
+}
+function displayInfo( cam=getMesh('cam') ){
+	cam.frameCue = 0;
+	let textFieldPY = 0;
+	for(let i=0; i< scn.objsInfo[scn.currIntrsc].length; i++){
+		let textField = scn.objsInfo[scn.currIntrsc][i];
+		let textMesh = generateText(textField.text, getMesh('infoCtnr', ['cam'])[textField.tag].style, getMesh('infoCtnr', ['cam'])[textField.tag].size);
+		getMesh('infoCtnr', ['cam']).add( textMesh );
+		textMesh.position.y = textFieldPY;
+		textFieldPY -= textMesh.bb.h;
+	}
+	for(let i=0; i< getMesh('infoCtnr', ['cam']).children.length; i++){
+		animeItem(getMesh('infoCtnr', ['cam']).children[i], 'material', ['opacity'], [1], 1);
+	}
+}
+function cameraInfo( ){
+	scn.targetP = getMesh(scn.currIntrsc, ['rayBodies']).getWorldPosition( scn.targetP );
+	getMesh('cam').lookAt(scn.targetP);
+}
+function hideInfo(){
+	for(let i=0; i< getMesh('infoCtnr', ['cam']).children.length; i++){
+		animeItem(getMesh('infoCtnr', ['cam']).children[i], 'material', ['opacity'], [0], 1, 0, function(){
+			if(i == getMesh('infoCtnr', ['cam']).children.length-1){
+				clearInfoCtnr();
+			}
+		});
+	}
+}
+function clearInfoCtnr( ) {
+    for(let i=0; i< getMesh('infoCtnr', ['cam']).children.length; i++){
+		getMesh('infoCtnr', ['cam']).children[i].geometry.dispose();
+		getMesh('infoCtnr', ['cam']).children[i].material.dispose();
+	}
+	getMesh('infoCtnr', ['cam']).clear();
+	getMesh('cam').info = false;
+	scn.selected = null;
+	scn.currIntrsc = null;
+}
+
+
 //[ geometry[{material{txt,spec}}] ] 
 function loadMeshesSpecs(){
 	return {
@@ -716,226 +964,11 @@ function loadHudObjs(){
 		stick: {
 			builder: setStick, geometry: CircleGeometry, size:1, subDivs:32, meshes: 
 			[
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', identifier: null, action: {x:'translateX', y:'translateZ'}, startP: new Vector2(), weight: { x:(-0.2), y:(-0.3) }, layout: {x:-1, y:0, scale: 0.4} } },
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', identifier: null, action: { x:'rotateY', y:'rotateX' }, startP: new Vector2(), weight: { x:(-0.002), y:(0.003) }, layout: {x:1, y:0, scale: 0.4}  } }
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', identifier: null, action: 'moves', x:'x', y:'z', startP: new Vector2(), weight: { x:(0.1), y:(-0.1) }, layout: {x:-1, y:0, scale: 0.4} } },
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', identifier: null, action: 'rotates', x:'x', y:'y', startP: new Vector2(), weight: { x:(-0.002), y:(0.003) }, layout: {x:1, y:0, scale: 0.4}  } }
 			]
 		}
 	}
-}
-
-function pointerdown( e ) {
-	e.preventDefault();
-	intersectClickEvent(e);
-}
-function touchstart( e ) {
-	e.preventDefault();
-	intersectClickEvent(e);
-}
-function pointermove( e ){
-	e.preventDefault();
-	intersectMoveEvent(e);
-}
-function touchmove( e ) {
-	e.preventDefault();
-	intersectMoveEvent(e);
-}
-function updatePointer( e ){
-	e.preventDefault();
-	if ( e.changedTouches ) {
-		if ( e.changedTouches.length > 1 ) { return }
-			e = e.changedTouches[0];
-	}
-	scn.pointer.x = ( e.clientX / scn.canvas.offsetWidth ) * 2 - 1;
-	scn.pointer.y = - ( e.clientY / scn.canvas.offsetHeight ) * 2 + 1;
-}
-function intersectClickEvent(e){
-	updatePointer( e );
-	if( scn.pointer.y > getMesh('cam').hudAreaH ){
-		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
-		scn.intersects = scn.rCast.intersectObjects( getMesh( 'rayBodies').children, false );
-		if(!getMesh('cam').lock && !getMesh('cam').info){
-			if ( scn.intersects.length > 0 ) {
-				scn.currIntrsc = scn.intersects[0].object.name;
-				getMesh('cam').lock = true;
-				lockTarget();
-			}
-		}
-		if ( scn.intersects.length == 0 ) {
-			getMesh('cam').lock = false;
-			if( getMesh('cam').info ){
-				 hideInfo();
-			}
-		}
-	}
-	if( scn.pointer.y <= getMesh('cam').hudAreaH ){
-		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
-		scn.intersects = scn.rCast.intersectObjects( getMesh('btns', ['cam', 'hud']).children, true );
-		if ( scn.intersects.length > 0 ) {
-			getMesh('hud', ['cam']).toggle = true;
-			scn.btnPressed.push(scn.intersects[0].object.name);
-			getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).startP.set(scn.pointer.x, scn.pointer.y);
-			getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).identifier = e.identifier;
-		}
-	}
-}
-function intersectMoveEvent(e){
-	updatePointer( e );
-	if( scn.pointer.y > getMesh('cam').hudAreaH ){
-		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
-		scn.intersects = scn.rCast.intersectObjects( getMesh( 'rayBodies').children, false );
-		if(!getMesh('cam').lock && !getMesh('cam').info){
-			/*
-			getMesh('cam').rotateX( scn.pointer.y * Math.PI/180 );
-			getMesh('cam').rotateY(scn.pointer.x * -Math.PI/180);
-			*/
-			if ( scn.intersects.length > 0 ) {
-				if(scn.currIntrsc == null){
-					//'new'			
-					scn.currIntrsc = scn.intersects[0].object.name;
-					animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0.3], 0.5);
-				}
-				if(scn.currIntrsc != scn.intersects[0].object.name){
-					//'changed'
-					animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0], 0.5);
-					scn.currIntrsc = scn.intersects[0].object.name;	
-					animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0.3], 0.5);
-				}
-			}
-			if ( scn.intersects.length === 0 &&  scn.currIntrsc != null) {
-				//'none'
-				animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0], 0.5);
-				scn.currIntrsc = null;
-			}
-		}
-	}
-	if( scn.pointer.y <= getMesh('cam').hudAreaH/2 ){
-		if(getMesh('hud', ['cam']).toggle === true){
-			//getMesh('cam').velocity += (getMesh('cam').speed - getMesh('cam').velocity) * 0.3;
-			for(let i = 0; i< scn.btnPressed.length; i++){
-				let deltaX = (scn.pointer.x - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.x);
-				let pX = (getMesh('cam').frontPlaneRatio*deltaX)*scn.frontPlaneDistance;
-				let deltaY = (scn.pointer.y - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.y);
-				let pY = (getMesh('cam').frontPlaneRatio*deltaY)*scn.frontPlaneDistance;
-				//console.log(pX, pY)
-				let limit = Math.sqrt( Math.pow(pX, 2) + Math.pow(pY, 2) );
-				if( limit >= 1 ){
-					pX = (pX/limit);
-					pY = (pY/limit);
-				}
-				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.x = pX;
-				getMesh('cam')[ getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns'])['action']['x'] ](pX * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).weight.x );
-				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.y = pY;				
-				getMesh('cam')[ getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns'])['action']['y'] ](pY * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).weight.y);
-			}
-		}
-	}
-}
-function pointerup( e ){
-	e.preventDefault();
-	if(getMesh('hud', ['cam']).toggle === true){
-		getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).position.x = 0;
-		getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).position.y = 0;
-		scn.btnPressed.pop();
-		getMesh('hud', ['cam']).toggle = false;
-	}
-}
-function touchend( e ) {
-}
-function keydown( e ) {
-	if(!getMesh('cam').lock && !getMesh('cam').info){
-		getMesh('cam').velocity += (getMesh('cam').speed - getMesh('cam').velocity) * .2;
-		if (e.key === 'ArrowUp') {
-			getMesh('cam').translateZ(-getMesh('cam').velocity);
-		}
-		if (e.key === 'ArrowDown') {
-			getMesh('cam').translateZ(getMesh('cam').velocity);
-		}
-		if (e.key === 'ArrowRight') {
-			getMesh('cam').translateX(getMesh('cam').velocity);
-		}
-		if (e.key === 'ArrowLeft') {
-			getMesh('cam').translateX(-getMesh('cam').velocity);
-		}
-	}
-}
-function keyup( e ) {
-	//getMesh('cam').velocity -= (getMesh('cam').speed - getMesh('cam').velocity) * .2;
-	getMesh('cam').velocity = 0;
-}
-function wheel(e){
-	if(!getMesh('cam').lock){
-		getMesh('cam').velocity += (getMesh('cam').speed - getMesh('cam').velocity) * .002;
-		getMesh('cam').translateZ(getMesh('cam').velocity * e.deltaY );
-	}
-	return;
-}
-
-function lockTarget(){
-	getMesh('cam').frameCue = 0;
-	scn.selected = scn.currIntrsc;
-	scn.targetOffset = ( getMesh(scn.currIntrsc, ['rayBodies']).geometry.boundingSphere.radius * 3) + scn.frontPlaneDistance;
-}
-function cameraLock( cam=getMesh('cam') ){
-	cam.initP = cam.position;
-	scn.targetP = getMesh(scn.currIntrsc, ['rayBodies']).getWorldPosition( scn.targetP );
-	cam.distance = cam.initP.distanceTo(scn.targetP);
-	cam.speed = cam.distance/10;
-	if( cam.distance > scn.targetOffset ){
-		cam.velocity += (cam.speed - cam.velocity) * .3;
-		cam.translateZ(-cam.velocity);
-		
-		cam.rMatrix.lookAt( cam.position, scn.targetP, scn.worldUp );
-		scn.targetQ.setFromRotationMatrix( cam.rMatrix );
-		if ( ! cam.quaternion.equals( scn.targetQ ) ) {
-		const step = (cam.quaternion.angleTo(scn.targetQ) ) * (cam.frameCue/30);
-			cam.quaternion.rotateTowards( scn.targetQ, step );
-		}
-		cam.frameCue++;
-	}
-	if( cam.distance <= scn.targetOffset ){
-		animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0], 0.5);
-		cam.lookAt(scn.targetP);
-		cam.lock = false;
-		cam.info = true;
-		displayInfo();
-	}
-}
-function displayInfo( cam=getMesh('cam') ){
-	cam.frameCue = 0;
-	let textFieldPY = 0;
-	for(let i=0; i< scn.objsInfo[scn.currIntrsc].length; i++){
-		let textField = scn.objsInfo[scn.currIntrsc][i];
-		let textMesh = generateText(textField.text, getMesh('infoCtnr', ['cam'])[textField.tag].style, getMesh('infoCtnr', ['cam'])[textField.tag].size);
-		getMesh('infoCtnr', ['cam']).add( textMesh );
-		textMesh.position.y = textFieldPY;
-		textFieldPY -= textMesh.bb.h;
-	}
-	for(let i=0; i< getMesh('infoCtnr', ['cam']).children.length; i++){
-		animeItem(getMesh('infoCtnr', ['cam']).children[i], 'material', ['opacity'], [1], 1);
-	}
-}
-function cameraInfo( ){
-	scn.targetP = getMesh(scn.currIntrsc, ['rayBodies']).getWorldPosition( scn.targetP );
-	getMesh('cam').lookAt(scn.targetP);
-}
-function hideInfo( cam=getMesh('cam') ){
-	for(let i=0; i< getMesh('infoCtnr', ['cam']).children.length; i++){
-		animeItem(getMesh('infoCtnr', ['cam']).children[i], 'material', ['opacity'], [0], 1, 0, function(){
-			if(i == getMesh('infoCtnr', ['cam']).children.length-1){
-				clearInfoCtnr();
-			}
-		});
-	}
-}
-function clearInfoCtnr( ) {
-    for(let i=0; i< getMesh('infoCtnr', ['cam']).children.length; i++){
-		getMesh('infoCtnr', ['cam']).children[i].geometry.dispose();
-		getMesh('infoCtnr', ['cam']).children[i].material.dispose();
-	}
-	getMesh('infoCtnr', ['cam']).clear();
-	getMesh('cam').info = false;
-	scn.selected = null;
-	scn.currIntrsc = null;
 }
 
 function filesLoad(){
@@ -1002,7 +1035,7 @@ function render(){
 	getMesh('earth').children[0].rotation.y += 0.003;
 	if(getMesh('cam').lock){ cameraLock(); }
 	if(getMesh('cam').info){ cameraInfo(); }
-	//getMesh('cam').translateZ(getMesh('cam').velocity);
+	if(!getMesh('cam').lock || !getMesh('cam').info){ move(); rotate(); }
 	for(let i = 0; i < scn.renderGroup.length; i++){
 		// [ startFrame, duration(seconds), item, property, param, ease, startV, deltaV, endV, endAction ]
 		scn.motionCount = scn.currFrame - scn.renderGroup[i][0];
