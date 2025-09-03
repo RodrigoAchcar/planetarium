@@ -114,7 +114,7 @@
 }
 </script>
 <script type="module">
-import { Cache, Scene, WebGLRenderer, ACESFilmicToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector2, Vector3, Matrix4, Quaternion, Group, Raycaster, PointLight, Color, SRGBColorSpace, CustomBlending, AdditiveBlending, MaxEquation, CatmullRomCurve3, InstancedBufferGeometry, InstancedBufferAttribute, Float32BufferAttribute, CircleGeometry, PlaneGeometry, Mesh, MeshStandardMaterial, MeshBasicMaterial, MeshMatcapMaterial, LoadingManager, TextureLoader, Layers, ShaderMaterial, RawShaderMaterial, DoubleSide, Vector4, BufferAttribute } from 'three';
+import { Cache, Scene, WebGLRenderer, ACESFilmicToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector2, Vector3, Matrix4, Quaternion, Euler, Group, Raycaster, PointLight, Color, SRGBColorSpace, CustomBlending, AdditiveBlending, MaxEquation, CatmullRomCurve3, InstancedBufferGeometry, InstancedBufferAttribute, Float32BufferAttribute, CircleGeometry, PlaneGeometry, Mesh, MeshStandardMaterial, MeshBasicMaterial, MeshMatcapMaterial, LoadingManager, TextureLoader, Layers, ShaderMaterial, RawShaderMaterial, DoubleSide, Vector4, BufferAttribute, Object3D } from 'three';
 
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -231,9 +231,17 @@ function setCamera(){
 	camera.moves = {x: 0, z: 0};
 	camera.rotates = {x: 0, y: 0};
 	
+	let center = new Object3D();
+	center.position.z = -10;
+	center.name = 'center';
+	camera.add(center);
+	camera.centerP = new Vector3();
+	
 	camera.attach(setHud( camera ));
 	camera.attach(setInfoCtnr());
 	camera.position.set( -60, 2, (120) );
+
+	
 	
 	return camera;
 }
@@ -437,8 +445,8 @@ function resize() {
 	getMesh('hud', ['cam']).position.y = getMesh('hud', ['cam']).bb.y;
 	getMesh('hud', ['cam']).position.z = -scn.frontPlaneDistance;
 	getMesh('artBorders', ['cam', 'hud']).scale.set( getMesh('hud', ['cam']).bb.width, getMesh('hud', ['cam']).bb.height, 1 );
-	getMesh('infoCtnr', ['cam']).scale.set( getMesh('cam').view.x, getMesh('cam').view.x, 1 );
-	getMesh('infoCtnr', ['cam']).position.y = -getMesh('hud', ['cam']).bb.y;
+	getMesh('infoCtnr', ['cam']).scale.set( getMesh('cam').view.x/2, getMesh('cam').view.x/2, 1 );
+	getMesh('infoCtnr', ['cam']).position.y = -getMesh('hud', ['cam']).bb.y*2;
 	return;
 }
 
@@ -534,7 +542,6 @@ function intersectMoveEvent(e){
 				let pX = (getMesh('cam').frontPlaneRatio*deltaX)*scn.frontPlaneDistance;
 				let deltaY = (scn.pointer.y - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.y);
 				let pY = (getMesh('cam').frontPlaneRatio*deltaY)*scn.frontPlaneDistance;
-				//console.log(pX, pY)
 				let limit = Math.sqrt( Math.pow(pX, 2) + Math.pow(pY, 2) );
 				if( limit >= 1 ){
 					pX = (pX/limit);
@@ -558,6 +565,8 @@ function pointerup( e ){
 		animeItem(getMesh('cam'), getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).action, [getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).y], [0], 0.5);
 		scn.btnPressed.pop();
 		getMesh('hud', ['cam']).toggle = false;
+		
+
 	}
 }
 function touchend( e ) {
@@ -592,15 +601,9 @@ function move(){
 }
 function rotate(){
 	getMesh('cam').velocity += (getMesh('cam').speed - getMesh('cam').velocity);
-	if(getMesh('cam').rotation.x <= -0.3){
-		getMesh('cam').rotation.x = -0.3;
-	}
-	if(getMesh('cam').rotation.x >= 0.3){
-		getMesh('cam').rotation.x = 0.3;
-	}
+	getMesh('cam').lookAt( getMesh('center', ['cam']).getWorldPosition( getMesh('cam').centerP ) )
 	getMesh('cam').rotateX(getMesh('cam').velocity * getMesh('cam').rotates.y);
 	getMesh('cam').rotateY(getMesh('cam').velocity * getMesh('cam').rotates.x);
-	getMesh('cam').rotation.z = 0;
 }
 function keyup( e ) {
 	e.preventDefault();
@@ -630,28 +633,31 @@ function wheel(e){
 }
 
 function lockTarget(){
-	getMesh('cam').frameCue = 0;
+	getMesh('cam').frameCue = scn.currFrame;
 	scn.selected = scn.currIntrsc;
-	scn.targetOffset = ( getMesh(scn.currIntrsc, ['rayBodies']).geometry.boundingSphere.radius * 3) + scn.frontPlaneDistance;
+	scn.targetOffset = Math.trunc((( getMesh(scn.currIntrsc, ['rayBodies']).geometry.boundingSphere.radius * 2) + scn.frontPlaneDistance)*10)/10;
 }
 function cameraLock( cam=getMesh('cam') ){
 	cam.initP = cam.position;
-	scn.targetP = getMesh(scn.currIntrsc, ['rayBodies']).getWorldPosition( scn.targetP );
-	cam.distance = cam.initP.distanceTo(scn.targetP);
-	cam.speed = cam.distance/10;
-	if( cam.distance > scn.targetOffset ){
-		cam.velocity += (cam.speed - cam.velocity) * .3;
-		cam.translateZ(-cam.velocity);
-		
+	scn.targetP = getMesh(scn.currIntrsc, ['rayBodies']).position;
+	cam.distance = Math.trunc(cam.initP.distanceTo(scn.targetP)*10)/10;
+
+	if( cam.distance !== scn.targetOffset ){
+		cam.velocity -= (cam.speed - cam.velocity) * .3;
 		cam.rMatrix.lookAt( cam.position, scn.targetP, scn.worldUp );
 		scn.targetQ.setFromRotationMatrix( cam.rMatrix );
 		if ( ! cam.quaternion.equals( scn.targetQ ) ) {
-		const step = (cam.quaternion.angleTo(scn.targetQ) ) * (cam.frameCue/30);
+		const step = (cam.quaternion.angleTo(scn.targetQ) ) * ((scn.currFrame-getMesh('cam').frameCue)/30);
 			cam.quaternion.rotateTowards( scn.targetQ, step );
 		}
-		cam.frameCue++;
 	}
-	if( cam.distance <= scn.targetOffset ){
+	if( cam.distance > scn.targetOffset){
+		cam.translateZ(-cam.velocity);
+	}
+	if( cam.distance < scn.targetOffset){
+		cam.translateZ(cam.velocity);
+	}
+	if( cam.distance === scn.targetOffset ){
 		animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0], 0.5);
 		cam.lookAt(scn.targetP);
 		cam.lock = false;
@@ -774,11 +780,10 @@ function generateText(textContent, fontStyle, fontSize){
 	} );
 	geometry.clearGroups();
 	geometry.computeBoundingBox();
-	let textMat = new MeshMatcapMaterial( { color: 0xffffff, transparent: true, fog: false } );
+	let textMat = new MeshMatcapMaterial( { color: 0xffffff, transparent: true, depthWrite: false, opacity:0, fog: false } );
 	let textMesh = new Mesh( geometry, textMat );
-	textMesh.material.opacity = 0;
-	let width = Math.trunc( Math.abs(textMesh.geometry.boundingBox.min.x - textMesh.geometry.boundingBox.max.x) *1000)/1000 ;
-	let height = Math.trunc( Math.abs(textMesh.geometry.boundingBox.min.y - textMesh.geometry.boundingBox.max.y) *1000)/1000 ;
+	let width = Math.trunc( Math.abs(textMesh.geometry.boundingBox.min.x - textMesh.geometry.boundingBox.max.x) *100)/100;
+	let height = Math.trunc( Math.abs(textMesh.geometry.boundingBox.min.y - textMesh.geometry.boundingBox.max.y) *100)/100;
 	textMesh.geometry.translate(-width/2, -height, 0);
 	textMesh.bb = {w:width, h:height};
 	geometry.dispose();
@@ -878,8 +883,8 @@ function setLights(){
 function setInfoCtnr(){
 	let infoCtnr = new Group();
 	infoCtnr.name = 'infoCtnr';
-	infoCtnr.h2 = { style: scn.fonts.rubik['Rubik-Bold'], size: 0.2 };
-	infoCtnr.p = { style: scn.fonts.rubik['Rubik-Regular'], size: 0.05 };
+	infoCtnr.h2 = { style: scn.fonts.rubik['Rubik-Bold'], size: 0.18 };
+	infoCtnr.p = { style: scn.fonts.rubik['Rubik-Regular'], size: 0.08 };
 	infoCtnr.position.z = -scn.frontPlaneDistance;
 	infoCtnr.renderOrder = 4;
 	return infoCtnr;
@@ -965,7 +970,7 @@ function loadHudObjs(){
 			builder: setStick, geometry: CircleGeometry, size:1, subDivs:32, meshes: 
 			[
 				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', identifier: null, action: 'moves', x:'x', y:'z', startP: new Vector2(), weight: { x:(0.1), y:(-0.1) }, layout: {x:-1, y:0, scale: 0.4} } },
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', identifier: null, action: 'rotates', x:'x', y:'y', startP: new Vector2(), weight: { x:(-0.002), y:(0.003) }, layout: {x:1, y:0, scale: 0.4}  } }
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', identifier: null, action: 'rotates', x:'x', y:'y', startP: new Vector2(), weight: { x:(-0.001), y:(0.001) }, layout: {x:1, y:0, scale: 0.4}  } }
 			]
 		}
 	}
@@ -1024,7 +1029,6 @@ function loadTexts(){
 	}
 	return obj;
 }
-
 function render(){
 	for( let key of Object.entries(scn.orbits) ){
 		getMesh(key[0]).position.copy(key[1].curve.getPointAt( (scn.currFrame/key[1].subDivs * key[1].translation / 10) % key[1].subDivs/key[1].subDivs ) );
@@ -1036,6 +1040,7 @@ function render(){
 	if(getMesh('cam').lock){ cameraLock(); }
 	if(getMesh('cam').info){ cameraInfo(); }
 	if(!getMesh('cam').lock || !getMesh('cam').info){ move(); rotate(); }
+
 	for(let i = 0; i < scn.renderGroup.length; i++){
 		// [ startFrame, duration(seconds), item, property, param, ease, startV, deltaV, endV, endAction ]
 		scn.motionCount = scn.currFrame - scn.renderGroup[i][0];
