@@ -250,11 +250,12 @@ function setCamera(){
 	center.position.z = -10;
 	center.name = 'center';
 	camera.add(center);
-	camera.centerP = new Vector3();
+	camera.centerP = new Vector3(-40, 0, 20);
 	
 	camera.attach(setHud( camera ));
 	camera.attach(setInfoCtnr());
-	camera.position.set( -60, 2, (120) );
+	camera.position.set( 40, 20, 120 );
+	camera.lookAt( camera.centerP )
 	return camera;
 }
 function setMeshes(){
@@ -414,17 +415,17 @@ function setMeshes(){
 	run();
 }
 function run(){
-	scn.canvas.addEventListener( 'pointermove', pointermove);
-	scn.canvas.addEventListener( 'pointerdown', pointerdown );
+	document.addEventListener( 'pointermove', pointermove);
+	document.addEventListener( 'pointerdown', pointerdown );
 	window.addEventListener( 'pointerup', pointerup );
-	/*
-	scn.renderer.domElement.addEventListener( 'touchstart', touchstart);
-	scn.renderer.domElement.addEventListener( 'touchmove', touchmove);
-	window.addEventListener( 'touchend', touchend);
-	*/
-	scn.canvas.addEventListener( 'wheel', wheel );
-	scn.canvas.addEventListener( 'keyup', keyup );
-	scn.canvas.addEventListener( 'keydown', keydown );
+	
+	document.addEventListener( 'touchstart', touchstart, false);
+	document.addEventListener( 'touchmove', touchmove, false);
+	window.addEventListener( 'touchend', touchend, false);
+	
+	document.addEventListener( 'wheel', wheel );
+	document.addEventListener( 'keyup', keyup );
+	document.addEventListener( 'keydown', keydown );
 	window.addEventListener( 'resize', resize );
 	setBloomPass();
 	resize();
@@ -446,12 +447,15 @@ function resize() {
 	getMesh('cam').hudPercent = (getMesh('hud', ['cam']).bb.height * 100)/getMesh('cam').view.y;
 	getMesh('cam').hudAreaH = -(100-(getMesh('cam').hudPercent*2))/100;
 
+
 	for( let i = 0; i < getMesh('btns', ['cam', 'hud']).children.length; i++ ){
 		let btnName = getMesh('btns', ['cam', 'hud']).children[i].name;
 		
 		let btn = getMesh(btnName, ['cam', 'hud', 'btns', btnName]);
 		let scale = getMesh('hud', ['cam']).bb.height/2 * btn.layout.scale;
-		let x = ((btn.parent.bb.width/4)* btn.layout.x) * getMesh('cam').frontPlaneRatio;
+		
+
+		let x = ((btn.parent.bb.width/2)* btn.layout.x) * getMesh('cam').frontPlaneRatio;
 		let y = btn.layout.y;
 		getMesh(btnName, ['cam', 'hud', 'btns']).scale.set(scale, scale, 1);
 		getMesh(btnName, ['cam', 'hud', 'btns']).position.set(x, y, 0);		
@@ -467,33 +471,80 @@ function resize() {
 	scn.finalComposer.setSize( scn.canvas.offsetWidth, scn.canvas.offsetHeight );
 }
 
-function pointerdown( e ) {
-	e.preventDefault();
-	intersectClickEvent(e);
-}
+
 function touchstart( e ) {
 	e.preventDefault();
-	intersectClickEvent(e);
+	let changedTouches = e.changedTouches;
+	for (let i = 0; i < changedTouches.length; i++) {
+		scn.pointer.x = ( changedTouches[i].clientX / scn.canvas.offsetWidth ) * 2 - 1;
+		scn.pointer.y = - ( changedTouches[i].clientY / scn.canvas.offsetHeight ) * 2 + 1;
+		
+		if( scn.pointer.y <= getMesh('cam').hudAreaH ){
+			scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
+			scn.intersects = scn.rCast.intersectObjects( getMesh('btns', ['cam', 'hud']).children, true );
+			if ( scn.intersects.length > 0 ) {
+				getMesh('hud', ['cam']).toggle = true;
+				scn.btnPressed.push(scn.intersects[0].object.name);
+				getMesh(scn.intersects[0].object.name, ['cam', 'hud', 'btns', scn.intersects[0].object.name]).startP.set(scn.pointer.x, scn.pointer.y);
+				getMesh(scn.intersects[0].object.name, ['cam', 'hud', 'btns', scn.intersects[0].object.name]).identifier = changedTouches[i].identifier;
+			}
+		}
+	}
 }
-function pointermove( e ){
-	e.preventDefault();
-	intersectMoveEvent(e);
+function touchmove(e) {
+	let changedTouches = e.changedTouches;
+	for (let i = 0; i < changedTouches.length; i++) {
+		let touch = changedTouches[i];
+		for (let j = 0; j < scn.btnPressed.length; j++) {
+			let index = getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns']).children.findIndex(item => item.identifier === touch.identifier);
+			if (index >= 0) {
+				getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).currP.x = ( touch.clientX / scn.canvas.offsetWidth ) * 2 - 1;
+				getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).currP.y = - ( touch.clientY / scn.canvas.offsetHeight ) * 2 + 1;
+				if( getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).currP.y <= getMesh('cam').hudAreaH/2 ){
+					if(getMesh('hud', ['cam']).toggle === true){
+						let deltaX = (getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).currP.x - getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).startP.x);
+						let pX = (getMesh('cam').frontPlaneRatio*deltaX)*scn.frontPlaneDistance;
+						let deltaY = (getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).currP.y - getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).startP.y);
+						let pY = (getMesh('cam').frontPlaneRatio*deltaY)*scn.frontPlaneDistance;
+						
+						pX = clamp(pX, -0.5, 0.5);
+						pY = clamp(pY, -0.5, 0.5);
+						getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).position.x = pX;
+						getMesh('cam')[getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).action][getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).x] += (pX * getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).weight.x);
+						
+						getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).position.y = pY;
+						getMesh('cam')[getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).action][getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).y] += (pY * getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).weight.y);
+					}
+				}			
+			}  
+		}
+	}
 }
-function touchmove( e ) {
-	e.preventDefault();
-	intersectMoveEvent(e);
+function touchend(e) {
+	let changedTouches = e.changedTouches;
+	for (let i = 0; i < changedTouches.length; i++) {
+		for (let j = 0; j < scn.btnPressed.length; j++) {
+			// Remove this touch
+			let index = getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns']).children.findIndex(item => item.identifier === changedTouches[i].identifier);
+			if (index >= 0) {
+				getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).position.x = 0;
+				animeItem(getMesh('cam'), getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).action, [getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).x], [0], 0.5);
+				getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).position.y = 0;
+				animeItem(getMesh('cam'), getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).action, [getMesh(scn.btnPressed[j], ['cam', 'hud', 'btns', scn.btnPressed[j]]).y], [0], 0.5);
+				scn.btnPressed.splice(index, 1);
+			}  
+		}
+	}
 }
-function updatePointer( e ){
+function pointerdown( e ) {
 	e.preventDefault();
 	if ( e.changedTouches ) {
-		//if ( e.changedTouches.length > 1 ) { return }
+		if ( e.changedTouches.length > 1 ) { return }
 			e = e.changedTouches[0];
 	}
 	scn.pointer.x = ( e.clientX / scn.canvas.offsetWidth ) * 2 - 1;
 	scn.pointer.y = - ( e.clientY / scn.canvas.offsetHeight ) * 2 + 1;
-}
-function intersectClickEvent(e){
-	updatePointer( e );
+	
 	if( scn.pointer.y > getMesh('cam').hudAreaH ){
 		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
 		scn.intersects = scn.rCast.intersectObjects( getMesh( 'rayBodies').children, false );
@@ -522,16 +573,23 @@ function intersectClickEvent(e){
 		}
 	}
 }
-function intersectMoveEvent(e){
-	updatePointer( e );
+function pointermove( e ){
+	e.preventDefault();
+	if ( e.changedTouches ) {
+		if ( e.changedTouches.length > 1 ) { return }
+			e = e.changedTouches[0];
+	}
+	scn.pointer.x = ( e.clientX / scn.canvas.offsetWidth ) * 2 - 1;
+	scn.pointer.y = - ( e.clientY / scn.canvas.offsetHeight ) * 2 + 1;
+	
 	if( scn.pointer.y > getMesh('cam').hudAreaH ){
 		scn.rCast.setFromCamera( scn.pointer, getMesh('cam') );
 		scn.intersects = scn.rCast.intersectObjects( getMesh( 'rayBodies').children, false );
 		if(!getMesh('cam').lock && !getMesh('cam').info){
-			/*
-			getMesh('cam').rotateX( scn.pointer.y * Math.PI/180 );
-			getMesh('cam').rotateY(scn.pointer.x * -Math.PI/180);
-			*/
+			
+			//getMesh('cam').rotateX( scn.pointer.y * Math.PI/180 );
+			//getMesh('cam').rotateY(scn.pointer.x * -Math.PI/180);
+			
 			if ( scn.intersects.length > 0 ) {
 				if(scn.currIntrsc == null){
 					//'new'			
@@ -559,11 +617,8 @@ function intersectMoveEvent(e){
 				let pX = (getMesh('cam').frontPlaneRatio*deltaX)*scn.frontPlaneDistance;
 				let deltaY = (scn.pointer.y - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).startP.y);
 				let pY = (getMesh('cam').frontPlaneRatio*deltaY)*scn.frontPlaneDistance;
-				let limit = Math.sqrt( Math.pow(pX, 2) + Math.pow(pY, 2) );
-				if( limit >= 1 ){
-					pX = (pX/limit);
-					pY = (pY/limit);
-				}
+				pX = clamp(pX, -0.5, 0.5);
+				pY = clamp(pY, -0.5, 0.5);
 				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.x = pX;
 				getMesh('cam')[getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).action][getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).x] += (pX * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).weight.x);
 				
@@ -571,27 +626,22 @@ function intersectMoveEvent(e){
 				getMesh('cam')[getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).action][getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).y] += (pY * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).weight.y);
 			}
 		}
-	}
+	}	
 }
 function pointerup( e ){
 	e.preventDefault();
 	if(getMesh('hud', ['cam']).toggle === true){
-		for(let i = 0; i< scn.btnPressed.length; i++){
-			if(getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).pointerId === e.pointerId){
-				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.x = 0;
-				animeItem(getMesh('cam'), getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).action, [getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).x], [0], 0.5);
-				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.y = 0;
-				animeItem(getMesh('cam'), getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).action, [getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).y], [0], 0.5);
-				scn.btnPressed.splice(i, 1);
-			}
-		}
+		getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).position.x = 0;
+		animeItem(getMesh('cam'), getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).action, [getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).x], [0], 0.5);
+		getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).position.y = 0;
+		animeItem(getMesh('cam'), getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).action, [getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).y], [0], 0.5);
+		scn.btnPressed.splice(0, 1);
 		if(scn.btnPressed.length === 0){
 			getMesh('hud', ['cam']).toggle = false;
 		}
 	}
 }
-function touchend( e ) {
-}
+
 function keydown( e ) {
 	e.preventDefault();
 	if(!getMesh('cam').lock && !getMesh('cam').info){
@@ -995,8 +1045,8 @@ function loadHudObjs(){
 		stick: {
 			builder: setStick, geometry: CircleGeometry, size:1, subDivs:32, meshes: 
 			[
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', pointerId: null, action: 'moves', x:'x', y:'z', startP: new Vector2(), weight: { x:(0.1), y:(-0.1) }, layout: {x:-1, y:0, scale: 0.4} } },
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', pointerId: null, action: 'rotates', x:'x', y:'y', startP: new Vector2(), weight: { x:(-0.001), y:(0.001) }, layout: {x:1, y:0, scale: 0.4}  } }
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', identifier: null, action: 'moves', x:'x', y:'z', startP: new Vector2(), currP: new Vector2(), weight: { x:(0.003), y:(-0.003) }, layout: {x:-1, y:0, scale: 0.4} } },
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', identifier: null, action: 'rotates', x:'x', y:'y', startP: new Vector2(), currP: new Vector2(), weight: { x:(-0.0002), y:(0.0002) }, layout: {x:1, y:0, scale: 0.4}  } }
 			]
 		}
 	}
