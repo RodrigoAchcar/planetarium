@@ -11,7 +11,7 @@
         * {padding: 0; margin: 0;}
         .invisible{ opacity: 1; display: none; }
         h1, h2, p{ color: #ffffff; }
-        canvas{ width: 100%; height: 100%; 	object-fit: contain; }
+        canvas{ width: 100%; height: 100%; 	object-fit: contain; overflow: hidden; touch-action: none; }
     </style>
 </head>
 <body>
@@ -22,7 +22,7 @@
 	<canvas id="canvas"></canvas>
 <div id="celestiaBodiesInfo" class="celestiaBodiesInfo" style="display: none">
     <div id="sun">
-        <h2>Sol</h2>
+        <h2>Ravi</h2>
         <p>Diâmetro: 1391000 km</p>
         <p>Rotação: 27 dias/terra</p>
     </div>
@@ -91,30 +91,43 @@
     </div>
 </div>
 <script type="x-shader/x-vertex" id="vertexshader">
+
 	varying vec2 vUv;
+
 	void main() {
+
 		vUv = uv;
+
 		gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
 	}
+
 </script>
+
 <script type="x-shader/x-fragment" id="fragmentshader">
+
 	uniform sampler2D baseTexture;
 	uniform sampler2D bloomTexture;
+
 	varying vec2 vUv;
+
 	void main() {
+
 		gl_FragColor = ( texture2D( baseTexture, vUv ) + vec4( 1.0 ) * texture2D( bloomTexture, vUv ) );
+
 	}
+
 </script>
 <script type="importmap">
 {
 	"imports": {
-		"three": "/static/js/webgl/build/three.module.js",
+		"three": "/static/js/webgl/build/three.module.min.js",
 		"three/addons/": "/static/js/webgl/jsm/"			
 	}
 }
 </script>
 <script type="module">
-import { Cache, Scene, WebGLRenderer, ACESFilmicToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector2, Vector3, Matrix4, Quaternion, Euler, Group, Raycaster, PointLight, Color, SRGBColorSpace, CustomBlending, AdditiveBlending, MaxEquation, CatmullRomCurve3, InstancedBufferGeometry, InstancedBufferAttribute, Float32BufferAttribute, CircleGeometry, PlaneGeometry, Mesh, MeshStandardMaterial, MeshBasicMaterial, MeshMatcapMaterial, LoadingManager, TextureLoader, Layers, ShaderMaterial, RawShaderMaterial, DoubleSide, Vector4, BufferAttribute, Object3D } from 'three';
+import { Scene, WebGLRenderer, ACESFilmicToneMapping, PCFSoftShadowMap, PerspectiveCamera, Vector2, Vector3, Matrix4, Quaternion, Group, Raycaster, PointLight, Color, SRGBColorSpace, AdditiveBlending, CatmullRomCurve3, InstancedBufferGeometry, CircleGeometry, PlaneGeometry, Mesh, MeshStandardMaterial, MeshBasicMaterial, MeshMatcapMaterial, LoadingManager, TextureLoader, Layers, ShaderMaterial } from 'three';
 
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -127,10 +140,8 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
-import { Font } from 'three/addons/loaders/FontLoader.js';
-import { TTFLoader } from 'three/addons/loaders/TTFLoader.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 
-Cache.enabled = true;
 const requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
 const cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
 
@@ -167,9 +178,7 @@ async function loadFiles(filesObj){
 					data.colorSpace = SRGBColorSpace;
 				}				
 				scn[types[0]][objs[0]][objs[1][i]] = data;
-				if( types[0] == 'fonts' ){
-					scn[types[0]][objs[0]][objs[1][i]] = new Font( data );
-				}
+
 				loadCount++;
 			}
 		}
@@ -208,9 +217,9 @@ function setScn(){
 	scn.targetOffset = null;
 	
 	scn.renderer = setRenderer();
-	setBloomPass();
-	scn.add(setCamera() );
-	scn.add( setLights() );
+	
+	scn.attach( setCamera() );
+	scn.attach( setLights() );
 	
 	setMeshes();
 }
@@ -230,8 +239,14 @@ function setCamera(){
 	camera.speed = 0.9;
 	camera.moves = {x: 0, z: 0};
 	camera.rotates = {x: 0, y: 0};
+	camera.lockVelocity = -1;
+	camera.operators = {
+		//a = distance, b = offset
+		camDistance : function(a,b){ return a > b },
+		camEqual : function(a,b){ return a <= b }
+	}
 	
-	let center = new Object3D();
+	let center = new Group();
 	center.position.z = -10;
 	center.name = 'center';
 	camera.add(center);
@@ -240,18 +255,15 @@ function setCamera(){
 	camera.attach(setHud( camera ));
 	camera.attach(setInfoCtnr());
 	camera.position.set( -60, 2, (120) );
-
-	
-	
 	return camera;
 }
 function setMeshes(){
 	let rayBodies = new Group();
 	rayBodies.name = 'rayBodies';
-	scn.add(rayBodies);
+	scn.attach(rayBodies);
 	let orbitPaths = new Group();
 	orbitPaths.name = 'orbitPaths';
-	scn.add(orbitPaths);
+	scn.attach(orbitPaths);
 	for( let mesh of Object.entries(scn.models.planetarium['solar-system'].scene.children) ){
 		let child = mesh[1];
 		if(child.isMesh){
@@ -290,10 +302,10 @@ function setMeshes(){
 						let mesh = new Mesh(geometry, mats);
 						mesh.name = scn.meshesSpec[child.name][i][0].txt.map;
 						mesh.scale.normalize();
-						mainMesh.add(mesh);
+						mainMesh.attach(mesh);
 						
 						if(mesh.name === 'earthClouds-map'){
-							mesh.scale.setScalar(1.02);
+							mesh.scale.setScalar(1.04);
 						}
 						for(let i = 0; i < mats.length; i++){
 							mats[i].dispose();
@@ -320,7 +332,7 @@ function setMeshes(){
 			mainMesh.receiveShadow = true;
 			mainMesh.name = child.name;
 			mainMesh.renderOrder = 2;
-			scn.add(mainMesh);
+			scn.attach(mainMesh);
 			
 			//if in scn.objsInfo it has raycast
 			if(scn.objsInfo[child.name]){
@@ -330,7 +342,7 @@ function setMeshes(){
 				raycast.scale.setScalar(0.6);
 				raycast.name = child.name;
 				raycast.renderOrder = 3;
-				rayBodies.add(raycast);
+				rayBodies.attach(raycast);
 				raycastMat.dispose();
 			}
 			
@@ -364,14 +376,14 @@ function setMeshes(){
 					linewidth: 4,
 					dashed: true,
 					dashScale : 0,
-					transparent: true, opacity: 0.15, depthWrite : false
+					transparent: true, opacity: 0.02, depthWrite : false
 				} );
 				let line = new Line2( geometry, matLine );
 				line.computeLineDistances();
 				line.scale.set( 1, 1, 1 );
 				line.renderOrder = 0;
 				line.name = objToPathName;
-				orbitPaths.add( line );
+				orbitPaths.attach( line );
 				geometry.dispose();
 				matLine.dispose();
 			}
@@ -398,23 +410,25 @@ function setMeshes(){
 	delete scn.textures;
 	delete scn.models;
 	delete scn.meshesSpec;
-	getMesh('sun').layers.enable( 1 );
+	getMesh('sun').layers.enable( scn.BLOOM_SCENE );
 	run();
 }
 function run(){
-	document.addEventListener( 'pointermove', pointermove);
-	document.addEventListener( 'pointerdown', pointerdown );
-	document.addEventListener( 'pointerup', pointerup );
+	scn.canvas.addEventListener( 'pointermove', pointermove);
+	scn.canvas.addEventListener( 'pointerdown', pointerdown );
+	window.addEventListener( 'pointerup', pointerup );
 	/*
 	scn.renderer.domElement.addEventListener( 'touchstart', touchstart);
 	scn.renderer.domElement.addEventListener( 'touchmove', touchmove);
 	window.addEventListener( 'touchend', touchend);
 	*/
-	document.addEventListener( 'wheel', wheel );
-	document.addEventListener( 'keyup', keyup );
-	document.addEventListener( 'keydown', keydown );
+	scn.canvas.addEventListener( 'wheel', wheel );
+	scn.canvas.addEventListener( 'keyup', keyup );
+	scn.canvas.addEventListener( 'keydown', keydown );
 	window.addEventListener( 'resize', resize );
+	setBloomPass();
 	resize();
+	
 	animate();
 }
 function resize() {
@@ -432,12 +446,12 @@ function resize() {
 	getMesh('cam').hudPercent = (getMesh('hud', ['cam']).bb.height * 100)/getMesh('cam').view.y;
 	getMesh('cam').hudAreaH = -(100-(getMesh('cam').hudPercent*2))/100;
 
-
-	for( let i = 0; i < getMesh('btns', ['cam', 'hud']).btnNames.length; i++ ){
-		let btnName = getMesh('btns', ['cam', 'hud']).btnNames[i];
-		let btn = getMesh(btnName, ['cam', 'hud', 'btns']);
+	for( let i = 0; i < getMesh('btns', ['cam', 'hud']).children.length; i++ ){
+		let btnName = getMesh('btns', ['cam', 'hud']).children[i].name;
+		
+		let btn = getMesh(btnName, ['cam', 'hud', 'btns', btnName]);
 		let scale = getMesh('hud', ['cam']).bb.height/2 * btn.layout.scale;
-		let x = ((btn.bb.width/2)* btn.layout.x) * getMesh('cam').frontPlaneRatio;
+		let x = ((btn.parent.bb.width/4)* btn.layout.x) * getMesh('cam').frontPlaneRatio;
 		let y = btn.layout.y;
 		getMesh(btnName, ['cam', 'hud', 'btns']).scale.set(scale, scale, 1);
 		getMesh(btnName, ['cam', 'hud', 'btns']).position.set(x, y, 0);		
@@ -447,7 +461,10 @@ function resize() {
 	getMesh('artBorders', ['cam', 'hud']).scale.set( getMesh('hud', ['cam']).bb.width, getMesh('hud', ['cam']).bb.height, 1 );
 	getMesh('infoCtnr', ['cam']).scale.set( getMesh('cam').view.x/2, getMesh('cam').view.x/2, 1 );
 	getMesh('infoCtnr', ['cam']).position.y = -getMesh('hud', ['cam']).bb.y*2;
-	return;
+
+
+	scn.bloomComposer.setSize( scn.canvas.offsetWidth, scn.canvas.offsetHeight );
+	scn.finalComposer.setSize( scn.canvas.offsetWidth, scn.canvas.offsetHeight );
 }
 
 function pointerdown( e ) {
@@ -469,7 +486,7 @@ function touchmove( e ) {
 function updatePointer( e ){
 	e.preventDefault();
 	if ( e.changedTouches ) {
-		if ( e.changedTouches.length > 1 ) { return }
+		//if ( e.changedTouches.length > 1 ) { return }
 			e = e.changedTouches[0];
 	}
 	scn.pointer.x = ( e.clientX / scn.canvas.offsetWidth ) * 2 - 1;
@@ -500,8 +517,8 @@ function intersectClickEvent(e){
 		if ( scn.intersects.length > 0 ) {
 			getMesh('hud', ['cam']).toggle = true;
 			scn.btnPressed.push(scn.intersects[0].object.name);
-			getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).startP.set(scn.pointer.x, scn.pointer.y);
-			getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).identifier = e.identifier;
+			getMesh(scn.intersects[0].object.name, ['cam', 'hud', 'btns', scn.intersects[0].object.name]).startP.set(scn.pointer.x, scn.pointer.y);
+			getMesh(scn.intersects[0].object.name, ['cam', 'hud', 'btns', scn.intersects[0].object.name]).pointerId = e.pointerId;
 		}
 	}
 }
@@ -538,9 +555,9 @@ function intersectMoveEvent(e){
 	if( scn.pointer.y <= getMesh('cam').hudAreaH/2 ){
 		if(getMesh('hud', ['cam']).toggle === true){
 			for(let i = 0; i< scn.btnPressed.length; i++){
-				let deltaX = (scn.pointer.x - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.x);
+				let deltaX = (scn.pointer.x - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).startP.x);
 				let pX = (getMesh('cam').frontPlaneRatio*deltaX)*scn.frontPlaneDistance;
-				let deltaY = (scn.pointer.y - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).startP.y);
+				let deltaY = (scn.pointer.y - getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).startP.y);
 				let pY = (getMesh('cam').frontPlaneRatio*deltaY)*scn.frontPlaneDistance;
 				let limit = Math.sqrt( Math.pow(pX, 2) + Math.pow(pY, 2) );
 				if( limit >= 1 ){
@@ -548,10 +565,10 @@ function intersectMoveEvent(e){
 					pY = (pY/limit);
 				}
 				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.x = pX;
-				getMesh('cam')[getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).action][getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).x] += (pX * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).weight.x);
+				getMesh('cam')[getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).action][getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).x] += (pX * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).weight.x);
 				
 				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.y = pY;
-				getMesh('cam')[getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).action][getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).y] += (pY * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns']).weight.y);
+				getMesh('cam')[getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).action][getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).y] += (pY * getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).weight.y);
 			}
 		}
 	}
@@ -559,14 +576,18 @@ function intersectMoveEvent(e){
 function pointerup( e ){
 	e.preventDefault();
 	if(getMesh('hud', ['cam']).toggle === true){
-		getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).position.x = 0;
-		animeItem(getMesh('cam'), getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).action, [getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).x], [0], 0.5);
-		getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns', scn.btnPressed[0]]).position.y = 0;
-		animeItem(getMesh('cam'), getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).action, [getMesh(scn.btnPressed[0], ['cam', 'hud', 'btns']).y], [0], 0.5);
-		scn.btnPressed.pop();
-		getMesh('hud', ['cam']).toggle = false;
-		
-
+		for(let i = 0; i< scn.btnPressed.length; i++){
+			if(getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).pointerId === e.pointerId){
+				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.x = 0;
+				animeItem(getMesh('cam'), getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).action, [getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).x], [0], 0.5);
+				getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).position.y = 0;
+				animeItem(getMesh('cam'), getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).action, [getMesh(scn.btnPressed[i], ['cam', 'hud', 'btns', scn.btnPressed[i]]).y], [0], 0.5);
+				scn.btnPressed.splice(i, 1);
+			}
+		}
+		if(scn.btnPressed.length === 0){
+			getMesh('hud', ['cam']).toggle = false;
+		}
 	}
 }
 function touchend( e ) {
@@ -636,28 +657,39 @@ function lockTarget(){
 	getMesh('cam').frameCue = scn.currFrame;
 	scn.selected = scn.currIntrsc;
 	scn.targetOffset = Math.trunc((( getMesh(scn.currIntrsc, ['rayBodies']).geometry.boundingSphere.radius * 2) + scn.frontPlaneDistance)*10)/10;
+	scn.targetP = getMesh(scn.currIntrsc, ['rayBodies']).position;
+	getMesh('cam').distance = Math.trunc(getMesh('cam').initP.distanceTo(scn.targetP)*10)/10;
+	if( getMesh('cam').distance > scn.targetOffset){
+		getMesh('cam').lockVelocity = -1;
+		getMesh('cam').operators = {
+			camDistance : function(a,b){ return a > b },
+			camEqual : function(a,b){ return a <= b }
+		}
+	}
+	if( getMesh('cam').distance < scn.targetOffset){
+		getMesh('cam').lockVelocity = 1;
+		getMesh('cam').operators = {
+			camDistance : function(a,b){ return a < b },
+			camEqual : function(a,b){ return a >= b }
+		}
+	}
 }
 function cameraLock( cam=getMesh('cam') ){
 	cam.initP = cam.position;
 	scn.targetP = getMesh(scn.currIntrsc, ['rayBodies']).position;
 	cam.distance = Math.trunc(cam.initP.distanceTo(scn.targetP)*10)/10;
 
-	if( cam.distance !== scn.targetOffset ){
-		cam.velocity -= (cam.speed - cam.velocity) * .3;
+	if( cam.operators.camDistance( cam.distance, scn.targetOffset )  ){
+		cam.velocity -= ((cam.speed - cam.velocity)*cam.distance) * .3;
 		cam.rMatrix.lookAt( cam.position, scn.targetP, scn.worldUp );
 		scn.targetQ.setFromRotationMatrix( cam.rMatrix );
 		if ( ! cam.quaternion.equals( scn.targetQ ) ) {
-		const step = (cam.quaternion.angleTo(scn.targetQ) ) * ((scn.currFrame-getMesh('cam').frameCue)/30);
+		const step = (cam.quaternion.angleTo(scn.targetQ) ) * ((scn.currFrame-getMesh('cam').frameCue)/cam.distance);
 			cam.quaternion.rotateTowards( scn.targetQ, step );
 		}
+		cam.translateZ(cam.velocity * getMesh('cam').lockVelocity);
 	}
-	if( cam.distance > scn.targetOffset){
-		cam.translateZ(-cam.velocity);
-	}
-	if( cam.distance < scn.targetOffset){
-		cam.translateZ(cam.velocity);
-	}
-	if( cam.distance === scn.targetOffset ){
+	if( cam.operators.camEqual( cam.distance, scn.targetOffset ) ){
 		animeItem(getMesh(scn.currIntrsc, ['rayBodies']), 'material', ['opacity'], [0], 0.5);
 		cam.lookAt(scn.targetP);
 		cam.lock = false;
@@ -703,14 +735,13 @@ function clearInfoCtnr( ) {
 	scn.currIntrsc = null;
 }
 
-
 //[ geometry[{material{txt,spec}}] ] 
 function loadMeshesSpecs(){
 	return {
 		earth : [
 		[ { mat: MeshStandardMaterial, txt:{map: 'earthDay-map', bumpMap: 'earthDay-bumpMap', metalnessMap: 'earthDay-metalnessMap'}, spec: {roughness: 1, metalness: 1, anisotropy: 0.2,  bumpScale: 0.001, transparent: true, depthWrite : false, 
-		blending: CustomBlending, 
-		blendEquation: MaxEquation,
+		blending: AdditiveBlending, 
+
 		}} , { mat: MeshStandardMaterial, txt:{map: 'earthNight-map', lightMap: 
 		'earthNight-map', bumpMap: 'earthDay-bumpMap'}, spec: {roughness: 1, metalness: 0, lightMapIntensity: 8, bumpScale: 0.001
 		}} ],
@@ -832,15 +863,17 @@ function setRenderer(){
 	renderer.shadowMap.enable = true;
 	renderer.shadowMap.type = PCFSoftShadowMap;
 	renderer.physicallyCorrectLights = true;	
-	renderer.sortObjects = false;				
+	renderer.sortObjects = false;	
+	renderer.autoClear = false;	
 	return renderer;
 }
 function setBloomPass(){
-	let BLOOM_SCENE = 1;
+	scn.BLOOM_SCENE = 1;
 	scn.bloomLayer = new Layers();
-	scn.bloomLayer.set( BLOOM_SCENE );
+	scn.bloomLayer.set( scn.BLOOM_SCENE );
+	
 	scn.renderScene = new RenderPass( scn, getMesh('cam') );
-	scn.bloomPass = new UnrealBloomPass( new Vector2( scn.canvas.width, scn.canvas.width ), 1.5, 0.4, 0.85 );
+	scn.bloomPass = new UnrealBloomPass( new Vector2( scn.canvas.offsetWidth, scn.canvas.offsetHeight ), 1.5, 0.4, 0.85 );
 	scn.bloomPass.threshold = 0.1;
 	scn.bloomPass.strength = 0.1;
 	scn.bloomPass.radius = 0.01;
@@ -883,8 +916,8 @@ function setLights(){
 function setInfoCtnr(){
 	let infoCtnr = new Group();
 	infoCtnr.name = 'infoCtnr';
-	infoCtnr.h2 = { style: scn.fonts.rubik['Rubik-Bold'], size: 0.18 };
-	infoCtnr.p = { style: scn.fonts.rubik['Rubik-Regular'], size: 0.08 };
+	infoCtnr.h2 = { style: scn.fonts.rubik['rubik_bold'], size: 0.28 };
+	infoCtnr.p = { style: scn.fonts.rubik['rubik_regular'], size: 0.18 };
 	infoCtnr.position.z = -scn.frontPlaneDistance;
 	infoCtnr.renderOrder = 4;
 	return infoCtnr;
@@ -901,25 +934,21 @@ function setHud( cam ){
 	
 	let artBorders = new Group();
 	artBorders.name = 'artBorders';
-	hud.add(artBorders);
+	hud.attach(artBorders);
 
-	let frame = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({color: 0x8888aa, transparent: true, opacity: 0.2, depthWrite: false}) );
+	let frame = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({color: 0x222222, transparent: true, opacity: 0.4, depthWrite: false}) );
 	frame.name = 'frame';
 	frame.geometry.computeBoundingBox();
 	frame.scale.normalize();
-	artBorders.add(frame);
+	artBorders.attach(frame);
 
 	frame.geometry.dispose();
 	frame.material.dispose();
-	
-	let mover = new Group();
-	mover.name = 'mover';
-	hud.add(mover);
+
 	
 	let btns = new Group();
 	btns.name = 'btns';
-	btns.btnNames = [];
-	hud.add(btns);
+	hud.attach(btns);
 	
 	hud.objs = loadHudObjs();
 	for( let ctrls of Object.values(hud.objs) ){
@@ -934,15 +963,12 @@ function setStick(btns, ctrls){
 	buffer.computeBoundingSphere();
 	const geometry = new InstancedBufferGeometry().copy( buffer );
 	geometry.instanceCount = ctrls.meshes.length;
-	//let translations = new Float32Array([-0.2, 0, 0, 0.5, 0, 0]);
-	//let scales = new Float32Array([0.2, 0.2, 0.2, 0.4, 0.4, 0.4]);
-	//geometry.setAttribute( 'translation', new InstancedBufferAttribute( translations, 3, 1 ) );
-    //geometry.setAttribute( 'scale', new InstancedBufferAttribute( scales, 3, 1 ) );
 	const material = new MeshMatcapMaterial( {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 } );
 	const mesh = new Mesh( geometry, material );
 
 	for(let i = 0; i < ctrls.meshes.length; i++){
 		let marker = new Group();
+		
 		geometry.addGroup( 0, Infinity, 1 );
 		let mat = new ctrls.meshes[i].mat(ctrls.meshes[i].spec);
 		let mesh = new Mesh(geometry, mat);
@@ -954,11 +980,11 @@ function setStick(btns, ctrls){
 		marker.bb.width = mesh.geometry.boundingSphere.radius*2;
 		marker.bb.height = mesh.geometry.boundingSphere.radius*2;
 		for(let [k, v] of Object.entries(ctrls.meshes[i].attr) ){
-			marker[k] = v;
+			mesh[k] = v;
 		}
+		marker.name = mesh.name;
 		marker.add(mesh);
 		btns.add(marker);
-		btns.btnNames.push(marker.name);
 		mat.dispose();
 	}
 	buffer.dispose();
@@ -969,8 +995,8 @@ function loadHudObjs(){
 		stick: {
 			builder: setStick, geometry: CircleGeometry, size:1, subDivs:32, meshes: 
 			[
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', identifier: null, action: 'moves', x:'x', y:'z', startP: new Vector2(), weight: { x:(0.1), y:(-0.1) }, layout: {x:-1, y:0, scale: 0.4} } },
-				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', identifier: null, action: 'rotates', x:'x', y:'y', startP: new Vector2(), weight: { x:(-0.001), y:(0.001) }, layout: {x:1, y:0, scale: 0.4}  } }
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickT', pointerId: null, action: 'moves', x:'x', y:'z', startP: new Vector2(), weight: { x:(0.1), y:(-0.1) }, layout: {x:-1, y:0, scale: 0.4} } },
+				{ mat: MeshMatcapMaterial, spec: {color: 0xbbbbbb, transparent: true, depthWrite: false, opacity: 0.4 }, attr: { name: 'stickR', pointerId: null, action: 'rotates', x:'x', y:'y', startP: new Vector2(), weight: { x:(-0.001), y:(0.001) }, layout: {x:1, y:0, scale: 0.4}  } }
 			]
 		}
 	}
@@ -1005,9 +1031,9 @@ function filesLoad(){
 			}
 		},
 		fonts: {
-			loaderClass: TTFLoader, absPath : "/static/fonts/", fileType: 'ttf',
+			loaderClass: FontLoader, absPath : "/static/fonts/", fileType: 'json',
 			files: {
-				rubik: [ 'Rubik-Regular', 'Rubik-Bold']
+				rubik: [ 'rubik_regular', 'rubik_bold']
 			}
 		}
 	}
@@ -1054,10 +1080,10 @@ function render(){
 		}
 		scn.renderGroup[i][2][scn.renderGroup[i][3] ][scn.renderGroup[i][4] ] = Math.trunc(scn.renderGroup[i][5](scn.motionCount, scn.renderGroup[i][6], scn.renderGroup[i][7], scn.renderGroup[i][1])*100 )/100;			
 	}
-	getMesh('cam').updateProjectionMatrix();
-	scn.renderer.render( scn, getMesh('cam') );
-	//scn.bloomComposer.render();
-	//scn.finalComposer.render();
+	
+	//scn.renderer.render( scn, getMesh('cam') );
+	scn.bloomComposer.render();
+	scn.finalComposer.render();
 }
 function animate() {
 	scn.now = performance.now();
